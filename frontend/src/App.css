@@ -1,0 +1,237 @@
+/* Estilo global para o fundo da página */
+body, html {
+  background-color: #F9F9F9; 
+  font-family: 'Arial', sans-serif;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden; /* Remover rolagem */
+}
+
+/* Estilo para o contêiner principal */
+.container {
+  padding: 20px;
+  height: calc(100vh - 60px); /* Ajustar altura para ocupar o espaço restante abaixo da navbar */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between; /* Garantir que a grade e a paginação estejam bem espaçadas */
+}
+
+.navbar {
+  background-color: #6BA82C;
+  color: white;
+  padding: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+}
+
+.navbar a {
+  color: white;
+  text-decoration: none;
+  margin-left: 20px;
+}
+
+.navbar .menu-icon {
+  display: none;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.navbar-links {
+  display: flex;
+  align-items: center;
+}
+
+.navbar-links a {
+  margin: 0 10px;
+}
+
+/* menu expansível na versão mobile */
+@media (max-width: 768px) {
+  .navbar-links {
+    display: none;
+    flex-direction: column;
+    position: absolute;
+    top: 60px;
+    left: 0;
+    right: 0;
+    background-color: #6BA82C;
+    padding: 10px;
+  }
+
+  .navbar-links.active {
+    display: flex;
+  }
+
+  .navbar .menu-icon {
+    display: block;
+  }
+}
+
+h1, h2 {
+  color: #333;
+}
+
+/*botões */
+.btn {
+  border-radius: 20px;
+  background-color: #6BA82C;
+  border: none;
+  color: #fff;
+  margin: 5px;
+  padding: 10px 20px;
+}
+
+.btn:hover {
+  background-color: #5c9126;
+}
+
+.btn-warning {
+  background-color: #ffc107;
+}
+
+.btn-danger {
+  background-color: #dc3545;
+}
+
+.btn-secondary {
+  background-color: #6c757d;
+}
+
+/* inputs e textos */
+input,
+textarea {
+  border-radius: 10px;
+  border: 2px solid #ddd;
+  padding: 10px;
+  outline: none;
+}
+
+input:focus,
+textarea:focus {
+  border-color: #6BA82C;
+}
+
+/* grade de alertas */
+.alert-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(288px, 1fr));
+  grid-auto-rows: 132px; /* altura fixa dos blocos */
+  gap: 15px; /* espaçamento uniforme entre os blocos */
+  padding: 20px;
+  box-sizing: border-box; /* inclui o padding e o border no cálculo da largura e altura */
+  overflow: hidden; /* remover rolagem da grade */
+  height: 100%; /* ocupa o máximo possível do contêiner */
+}
+
+/* blocos de alerta */
+.alert-card {
+  border-radius: 10px;
+  width: 90%; /* ocupa largura disponível */
+  height: 90%; /* ocupa altura disponível */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+  text-align: center;
+  overflow: hidden;
+  position: relative;
+  padding: 15px; /* espaçamento interno */
+  box-sizing: border-box; /* inclui o padding e o border no cálculo da largura e altura */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+/* blocos de alerta placeholders */
+.alert-card-placeholder {
+  background-color: #C0C0C0; 
+}
+
+/* bloco de adicionar alerta para admin */
+.alert-card-add {
+  background-color: #6BA82C; 
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.alert-card-add:hover {
+  background-color: #5c9126;
+}
+
+/* ícones de edição e exclusão */
+.icon-buttons {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+  width: 100%;
+}
+
+.icon-button {
+  color: #fff;
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  margin: 0 5px;
+  padding: 5px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.icon-buttons .icon-button:hover {
+  opacity: 0.8;
+}
+
+/* textos dos alertas */
+.alert-card .card-title, .alert-card .card-text, .alert-card p {
+  color: #fff; 
+  margin: 0;
+  padding: 5px 0;
+}
+
+/* Ajusta o espaçamento dentro dos blocos de alerta */
+.alert-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+
+/* botões de paginação */
+.pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px; 
+  margin-bottom: 40px; 
+}
+
+.pagination button {
+  background-color: #6BA82C;
+  border: none;
+  color: white;
+  padding: 10px 20px;
+  margin: 0 10px; 
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.pagination button:hover {
+  background-color: #5c9126;
+}
+
+.pagination button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
