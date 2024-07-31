@@ -10,4 +10,3 @@ export const fetchAlertas = async () => {
   return await response.json();
 };
 
-// Adicione outras funções para chamadas de API conforme necessário

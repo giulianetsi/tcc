@@ -12,7 +12,6 @@ const Login = () => {
     try {
       const response = await axios.post('http://localhost:5000/login', { login, senha }, { withCredentials: true });
       setMessage(response.data.message);
-      // Redirecionar para o dashboard após o login bem-sucedido
       if (response.data.message === 'Login bem-sucedido') {
         window.location.href = '/Dashboard';
       }

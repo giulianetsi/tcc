@@ -62,7 +62,7 @@ const Dashboard = ({ username, alertas, isAdmin }) => {
     currentPage * alertsPerPage
   );
 
-  // adicionar blocos cinzas se houver espaço sobrando na página atual
+  // adicionar blocos cinzas se houver espaço sobrando na página atual ?? talvez remover
   while (currentAlertas.length < alertsPerPage) {
     currentAlertas.push({
       id: `placeholder-${currentAlertas.length}`,

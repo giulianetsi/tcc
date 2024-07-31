@@ -18,7 +18,7 @@ app.use(session({
   cookie: { secure: false }, 
 }));
 
-// Rota de login
+
 app.post('/login', async (req, res) => {
   const { login, senha } = req.body;
 
@@ -42,11 +42,10 @@ app.post('/login', async (req, res) => {
   }
 });
 
-//Rota de incluir alerta
+
 app.post('/add-alerta', async (req, res) => {
   const { titulo, descricao, tipo, publico, data_horario_evento, local_evento } = req.body;
 
-  // Obtém a data e hora atuais
   const dataCriacao = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
   try {
