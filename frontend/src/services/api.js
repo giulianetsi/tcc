@@ -1,5 +1,4 @@
-// frontend/src/services/api.js
-const API_URL = 'http://localhost:300/api';
+const API_URL = 'http://localhost:5000';
 
 export const fetchUsers = async () => {
   const response = await fetch(`${API_URL}/users`);

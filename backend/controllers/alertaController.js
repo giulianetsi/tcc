@@ -1,26 +1,27 @@
-const Alerta = require('../models/alerta');
+const db = require('../db');
 
-const getAlertas = (req, res) => {
-    Alerta.getAlertasByType(req.session.user.tipo, (alertas) => {
-        res.render('dashboard', {
-            username: req.session.user.login,
-            alertas: alertas,
-            isAdmin: req.session.user.tipo === 'admin',
-        });
-    });
+const addAlerta = async (req, res) => {
+  const { titulo, descricao, tipo, usuario_id, publico, data_horario_evento, local_evento } = req.body;
+
+  try {
+    await db.execute('INSERT INTO notificacoes (titulo, descricao, tipo, usuario_id, publico, data_horario_evento, local_evento) VALUES (?, ?, ?, ?, ?, ?, ?)', 
+      [titulo, descricao, tipo, usuario_id, publico, data_horario_evento, local_evento]);
+    res.status(201).json({ message: 'Alerta criado com sucesso' });
+  } catch (error) {
+    res.status(500).json({ message: 'Erro ao criar alerta', error });
+  }
 };
 
-const addAlerta = (req, res) => {
-    if (req.session.user.tipo !== 'admin') {
-        return res.status(403).send('Forbidden');
-    }
-    const { message, type } = req.body;
-    Alerta.insertAlertas(message, type, () => {
-        res.redirect('/dashboard');
-    });
+const getAlertas = async (req, res) => {
+  try {
+    const [alertas] = await db.execute('SELECT * FROM notificacoes');
+    res.status(200).json(alertas);
+  } catch (error) {
+    res.status(500).json({ message: 'Erro ao buscar alertas', error });
+  }
 };
 
 module.exports = {
-    getAlertas,
-    addAlerta,
+  addAlerta,
+  getAlertas
 };

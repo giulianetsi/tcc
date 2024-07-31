@@ -10,7 +10,7 @@ const Login = () => {
     e.preventDefault();
 
     try {
-      const response = await axios.post('http://localhost:3000/api/login', { login, senha }, { withCredentials: true });
+      const response = await axios.post('http://localhost:5000/login', { login, senha }, { withCredentials: true });
       setMessage(response.data.message);
       // Redirecionar para o dashboard após o login bem-sucedido
       if (response.data.message === 'Login bem-sucedido') {
