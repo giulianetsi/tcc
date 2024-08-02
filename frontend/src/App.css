@@ -17,6 +17,18 @@ body, html {
   justify-content: space-between; /* Garantir que a grade e a paginação estejam bem espaçadas */
 }
 
+/* Centralização de formulários */
+.centered-form {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+.form-group {
+  margin-bottom: 15px;
+}
+
 .navbar {
   background-color: #6BA82C;
   color: white;

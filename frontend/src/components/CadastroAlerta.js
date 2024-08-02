@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { Link } from 'react-router-dom';
 
 const CadastroAlerta = () => {
   const [titulo, setTitulo] = useState('');
@@ -37,7 +38,7 @@ const CadastroAlerta = () => {
   };
 
   return (
-    <div className="container">
+    <div className="container centered-form">
       <div className="row justify-content-center">
         <div className="col-md-6">
           <h1 className="text-center my-4">Adicionar Alerta</h1>
@@ -111,6 +112,7 @@ const CadastroAlerta = () => {
             <button type="submit" className="btn btn-primary btn-block">Adicionar Alerta</button>
           </form>
           {message && <p className="mt-3 text-center">{message}</p>}
+          <Link to="/dashboard" className="btn btn-secondary btn-block mt-4">Voltar</Link>
         </div>
       </div>
     </div>

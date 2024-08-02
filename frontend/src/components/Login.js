@@ -10,10 +10,10 @@ const Login = () => {
     e.preventDefault();
 
     try {
-      const response = await axios.post('http://localhost:5000/login', { login, senha }, { withCredentials: true });
+      const response = await axios.post('http://localhost:5000/api/users/login', { login, senha }, { withCredentials: true });
       setMessage(response.data.message);
       if (response.data.message === 'Login bem-sucedido') {
-        window.location.href = '/Dashboard';
+        window.location.href = '/';
       }
     } catch (error) {
       if (error.response) {
@@ -25,7 +25,7 @@ const Login = () => {
   };
 
   return (
-    <div className="container">
+    <div className="container centered-form">
       <div className="row justify-content-center">
         <div className="col-md-4">
           <h1 className="text-center my-4">Login</h1>

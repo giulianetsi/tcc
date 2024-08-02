@@ -1,3 +1,4 @@
+import axios from 'axios';
 const API_URL = 'http://localhost:5000';
 
 export const fetchUsers = async () => {
@@ -10,3 +11,8 @@ export const fetchAlertas = async () => {
   return await response.json();
 };
 
+const api = axios.create({
+  baseURL: 'http://localhost:5000/api', 
+});
+
+export default api;

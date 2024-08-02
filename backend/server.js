@@ -4,6 +4,7 @@ const cors = require('cors');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
 const pool = require('./db'); 
+const userRoutes = require('./routes/userRoutes');
 
 const app = express();
 const port = 5000;
@@ -18,48 +19,7 @@ app.use(session({
   cookie: { secure: false }, 
 }));
 
-
-app.post('/login', async (req, res) => {
-  const { login, senha } = req.body;
-
-  try {
-    const [rows] = await pool.query('SELECT * FROM usuarios WHERE login = ?', [login]);
-    if (rows.length > 0) {
-      const user = rows[0];
-      const isMatch = await bcrypt.compare(senha, user.senha);
-      if (isMatch) {
-        req.session.userId = user.id;
-        res.json({ message: 'Login bem-sucedido' });
-      } else {
-        res.status(401).json({ message: 'Senha incorreta' });
-      }
-    } else {
-      res.status(404).json({ message: 'Usuário não encontrado' });
-    }
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Erro no servidor' });
-  }
-});
-
-
-app.post('/add-alerta', async (req, res) => {
-  const { titulo, descricao, tipo, publico, data_horario_evento, local_evento } = req.body;
-
-  const dataCriacao = new Date().toISOString().slice(0, 19).replace('T', ' ');
-
-  try {
-    const [result] = await pool.execute(
-      `INSERT INTO alertas (titulo, descricao, tipo, publico, data_criacao, data_horario_evento, local_evento) 
-      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [titulo, descricao, tipo, publico, dataCriacao, data_horario_evento, local_evento]
-    );
-    res.json({ message: 'Alerta adicionado com sucesso!' });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Erro ao adicionar alerta' });
-  }
-});
+app.use('/api/users', userRoutes);
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
