@@ -5,3 +5,17 @@
 /*
 1º passo: Instalar a biblioteca web push no backend - npm i web-push para trabalhar com essa biblioteca do lado do backend
 */
+
+self.addEventListener('push', function(event) {
+    const data = event.data ? event.data.json() : { title: 'PUSH', body: 'DETALHES' };
+    const options = {
+      body: data.body,
+      icon: 'icon.png',
+      badge: 'badge.png'
+    };
+    
+    event.waitUntil(
+      self.registration.showNotification(data.title, options)
+    );
+  });
+  

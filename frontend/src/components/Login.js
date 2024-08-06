@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
+const publicVapidKey = 'BIDByJJTac6ThaHCPJVS1pszWZVVqvCyCfbL68BEogxfT9MO8Swu5ouZtambPZDgo-cEOMejCAvoViWn6zpX8ig';
+
 const Login = () => {
   const [login, setLogin] = useState('');
   const [senha, setSenha] = useState('');
@@ -8,20 +10,70 @@ const Login = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-
+  
     try {
       const response = await axios.post('http://localhost:5000/api/users/login', { login, senha }, { withCredentials: true });
-      setMessage(response.data.message);
-      if (response.data.message === 'Login bem-sucedido') {
-        window.location.href = '/';
+      console.log('Login:', response.data);
+  
+      const usuario_id = response.data.usuario_id;
+      if (!usuario_id) {
+        throw new Error('Usuário ID não disponível');
       }
+  
+      if ('serviceWorker' in navigator) {
+        const register = await navigator.serviceWorker.register('/service-worker.js');
+        const subscription = await register.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+        });
+  
+        console.log('Subscription:', subscription);
+  
+        // Tente obter as chaves diretamente usando o método `getKey`
+        const p256dh = subscription.getKey('p256dh') ? btoa(String.fromCharCode.apply(null, new Uint8Array(await subscription.getKey('p256dh')))) : null;
+        const auth = subscription.getKey('auth') ? btoa(String.fromCharCode.apply(null, new Uint8Array(await subscription.getKey('auth')))) : null;
+  
+        if (p256dh && auth) {
+          const subscribeResponse = await axios.post('http://localhost:5000/api/users/subscribe', {
+            endpoint: subscription.endpoint,
+            keys: {
+              p256dh: p256dh,
+              auth: auth
+            },
+            usuario_id: usuario_id
+          }, {
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+  
+          console.log('Subscription response:', subscribeResponse.data);
+        } else {
+          throw new Error('Propriedades de chave da inscrição não encontradas');
+        }
+      }
+  
+      window.location.href = '/';
     } catch (error) {
+      console.error('Erro no login ou subscription:', error);
       if (error.response) {
         setMessage(error.response.data.message);
       } else {
         setMessage('Erro no servidor');
       }
     }
+  };
+
+  const urlBase64ToUint8Array = (base64String) => {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
   };
 
   return (
