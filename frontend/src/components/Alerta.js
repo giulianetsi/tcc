@@ -12,7 +12,7 @@ export function Alerta({alerta, isAdmin, openModal}){
         <div
               key={alerta.id}
               className={`alert-card ${alerta.titulo === 'Placeholder' ? 'alert-card-placeholder' : ''}`}
-              style={{ backgroundColor: alerta.titulo !== 'Placeholder' ? alertColors[alerta.tipo] || alertColors['default'] : '#C0C0C0' }}
+              style={{ backgroundColor: alerta.titulo !== 'Placeholder' ? alertColors[alerta.tipo] || alertColors['default'] : '#F6F6F6' }}
               onClick={() => alerta.titulo !== 'Placeholder' && openModal(alerta)}
             >
               {alerta.titulo !== 'Placeholder' ? (

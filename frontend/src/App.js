@@ -64,9 +64,9 @@ function App() {
   }, []);
 
   const alertas = [
-    { id: 1, titulo: 'Alerta 1', texto: 'Texto do alerta 1', data: '2024-07-16', hora: '14:00', local: 'Sala 1', cor: 'red', icone: 'aviso' },
-    { id: 2, titulo: 'Alerta 2', texto: 'Texto do alerta 2', data: '2024-07-17', hora: '10:00', local: 'Sala 2', cor: 'blue', icone: 'evento' },
-    { id: 3, titulo: 'Alerta 3', texto: 'Texto do alerta 3', data: '2024-07-18', hora: '08:00', local: 'Sala 3', cor: 'green', icone: 'reuniao' },
+    { id: 1, titulo: 'Alerta 1', texto: 'Texto do alerta 1', data: '2024-07-16', hora: '14:00', local: 'Sala 1', tipo: 'Tipo1', icone: 'aviso' },
+    { id: 2, titulo: 'Alerta 2', texto: 'Texto do alerta 2', data: '2024-07-17', hora: '10:00', local: 'Sala 2', tipo: 'Tipo2', icone: 'evento' },
+    { id: 3, titulo: 'Alerta 3', texto: 'Texto do alerta 3', data: '2024-07-18', hora: '08:00', local: 'Sala 3', tipo: 'Tipo3', icone: 'reuniao' },
   ];
   
   const username = 'João Silva';

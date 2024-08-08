@@ -79,7 +79,7 @@ const Dashboard = ({ username, alertas, isAdmin }) => {
   return (
     <div>
       <nav className="navbar">
-        <span>Dashboard</span>
+        <span>IFSUL</span>
         <span className="menu-icon" onClick={toggleMenu}>&#9776;</span>
         <div className={`navbar-links ${menuOpen ? 'active' : ''}`}>
           <a href="/add-alerta">Adicionar Alerta</a>
