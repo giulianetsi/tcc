@@ -3,7 +3,7 @@ const { registerUser, loginUser, subscribe } = require('../controllers/userContr
 
 const router = express.Router();
 
-router.post('/register', registerUser);
+router.post('/register-user', registerUser);
 router.post('/login', loginUser);
 router.post('/subscribe', subscribe);
 

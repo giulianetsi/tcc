@@ -4,6 +4,7 @@ const cors = require('cors');
 const session = require('express-session');
 const pool = require('./db'); 
 const userRoutes = require('./routes/userRoutes');
+const eventoRoutes = require('./routes/eventoRoutes');
 
 const app = express();
 const port = 5000;
@@ -36,6 +37,7 @@ app.use(session({
 }));
 
 app.use('/api/users', userRoutes);
+app.use('/api/events', eventoRoutes);
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);

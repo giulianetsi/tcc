@@ -59,9 +59,6 @@ const removeInvalidSubscription = async (subscription) => {
   }
 };
 
-
-
-
 const registerUser = async (req, res) => {
   const { nome, sobrenome, email, telefone, dataNascimento, senha, cpf, tipo, matricula, turma, cursos, parentesco, cpfAluno } = req.body;
   
@@ -112,6 +109,7 @@ const registerUser = async (req, res) => {
         return res.status(400).json({ message: 'Aluno não encontrado' });
       }
     }
+
     // Enviar notificação push para todos os inscritos
     const [subscriptions] = await db.execute('SELECT * FROM subscriptions');
     const payload = JSON.stringify({ title: 'Novo usuário cadastrado', body: `O usuário ${nome} foi cadastrado` });
@@ -126,7 +124,6 @@ const registerUser = async (req, res) => {
       };
       await sendPushNotification(subscription, payload);
     });
-
 
     res.status(201).json({ message: 'Usuário registrado com sucesso', login });
   } catch (error) {

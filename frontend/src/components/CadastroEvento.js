@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 
-const CadastroAlerta = () => {
+const CadastroEvento = () => {
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [tipo, setTipo] = useState('');
@@ -14,8 +14,18 @@ const CadastroAlerta = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // LOGS
+    console.log('Dados a serem enviados:', {
+      titulo,
+      descricao,
+      tipo,
+      publico,
+      data_horario_evento: dataHorarioEvento,
+      local_evento: localEvento,
+    });
+
     try {
-      const response = await axios.post('http://localhost:5000/add-alerta', {
+      const response = await axios.post('http://localhost:5000/api/events/add-evento', {
         titulo,
         descricao,
         tipo,
@@ -33,7 +43,8 @@ const CadastroAlerta = () => {
       setDataHorarioEvento('');
       setLocalEvento('');
     } catch (error) {
-      setMessage('Erro ao adicionar alerta');
+      console.error('Erro ao enviar dados:', error);
+      setMessage('Erro ao adicionar evento');
     }
   };
 
@@ -41,7 +52,7 @@ const CadastroAlerta = () => {
     <div className="container centered-form">
       <div className="row justify-content-center">
         <div className="col-md-6">
-          <h1 className="text-center my-4">Adicionar Alerta</h1>
+          <h1 className="text-center my-4">Adicionar Evento</h1>
           <form onSubmit={handleSubmit}>
             <div className="form-group">
               <label htmlFor="titulo">Título</label>
@@ -119,4 +130,4 @@ const CadastroAlerta = () => {
   );
 };
 
-export default CadastroAlerta;
+export default CadastroEvento;

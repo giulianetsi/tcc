@@ -126,8 +126,8 @@ textarea:focus {
   border-color: #6BA82C;
 }
 
-/* grade de alertas */
-.alert-grid {
+/* grade de eventos */
+.event-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(288px, 1fr));
   grid-auto-rows: 132px; /* altura fixa dos blocos */
@@ -138,8 +138,8 @@ textarea:focus {
   height: 100%; /* ocupa o máximo possível do contêiner */
 }
 
-/* blocos de alerta */
-.alert-card {
+/* blocos de evento */
+.event-card {
   border-radius: 10px;
   width: 90%; /* ocupa largura disponível */
   height: 90%; /* ocupa altura disponível */
@@ -161,13 +161,13 @@ textarea:focus {
   text-align: center;
 }
 
-/* blocos de alerta placeholders */
-.alert-card-placeholder {
+/* blocos de evento placeholders */
+.event-card-placeholder {
   background-color: #C0C0C0; 
 }
 
-/* bloco de adicionar alerta para admin */
-.alert-card-add {
+/* bloco de adicionar evento para admin */
+.event-card-add {
   background-color: #6BA82C; 
   display: flex;
   justify-content: center;
@@ -177,7 +177,7 @@ textarea:focus {
   cursor: pointer;
 }
 
-.alert-card-add:hover {
+.event-card-add:hover {
   background-color: #5c9126;
 }
 
@@ -205,15 +205,15 @@ textarea:focus {
   opacity: 0.8;
 }
 
-/* textos dos alertas */
-.alert-card .card-title, .alert-card .card-text, .alert-card p {
+/* textos dos eventos */
+.event-card .card-title, .event-card .card-text, .event-card p {
   color: #fff; 
   margin: 0;
   padding: 5px 0;
 }
 
-/* Ajusta o espaçamento dentro dos blocos de alerta */
-.alert-content {
+/* Ajusta o espaçamento dentro dos blocos de evento */
+.event-content {
   display: flex;
   flex-direction: column;
   justify-content: center;
