@@ -123,7 +123,7 @@ const CadastroEvento = () => {
             <button type="submit" className="btn btn-primary btn-block">Adicionar Alerta</button>
           </form>
           {message && <p className="mt-3 text-center">{message}</p>}
-          <Link to="/dashboard" className="btn btn-secondary btn-block mt-4">Voltar</Link>
+          <Link to="/" className="btn btn-secondary btn-block mt-4">Voltar</Link>
         </div>
       </div>
     </div>

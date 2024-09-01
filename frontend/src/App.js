@@ -1,3 +1,4 @@
+// App.js
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Login from './components/Login';
@@ -5,20 +6,21 @@ import Cadastro from './components/Cadastro';
 import CadastroEvento from './components/CadastroEvento';
 import Dashboard from './components/Dashboard';
 import './App.css';
+import PrivateRoute from './components/PrivateRoute';
+import { AuthProvider } from './context/AuthContext';
 
 const publicVapidKey = "BIDByJJTac6ThaHCPJVS1pszWZVVqvCyCfbL68BEogxfT9MO8Swu5ouZtambPZDgo-cEOMejCAvoViWn6zpX8ig";
 
 async function subscribeUser() {
   if ('serviceWorker' in navigator) {
     try {
-      const register = await navigator.serviceWorker.ready; // Use navigator.serviceWorker.ready para garantir que o service worker esteja pronto
-      const subscription = await register.pushManager.getSubscription() || await register.pushManager.subscribe({
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription() || await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
       });
 
-      // ver se a inscrição já está no servidor
-      await fetch('/api/subscribe', {
+      await fetch('http://localhost:5000/api/subscribe', {
         method: 'POST',
         body: JSON.stringify(subscription),
         headers: {
@@ -28,7 +30,7 @@ async function subscribeUser() {
 
       console.log('Subscription enviada ao servidor com sucesso');
     } catch (error) {
-      console.error('Erro:', error);
+      console.error('Erro ao se inscrever:', error);
     }
   }
 }
@@ -51,13 +53,13 @@ function App() {
       window.addEventListener('load', () => {
         try {
           navigator.serviceWorker.register('/service-worker.js').then((registration) => {
-            console.log('Service Worker registered with scope:', registration.scope);
+            console.log('Service Worker registrado com sucesso com o escopo:', registration.scope);
             subscribeUser();
           }).catch(error => {
-            console.error('Service Worker registration failed:', error);
+            console.error('Falha ao registrar o Service Worker:', error);
           });
         } catch (error) {
-          console.error('Error during Service Worker registration:', error);
+          console.error('Erro ao registrar o Service Worker:', error);
         }
       });
     }
@@ -73,16 +75,27 @@ function App() {
   const isAdmin = true;
 
   return (
-    <Router>
-      <div className="App">
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register-user" element={<Cadastro />} />
-          <Route path="/add-evento" element={<CadastroEvento />} />
-          <Route path="/" element={<Dashboard username={username} eventos={eventos} isAdmin={isAdmin} />} />
-        </Routes>
-      </div>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <div className="App">
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route 
+              path="/register-user" 
+              element={<PrivateRoute element={<Cadastro />} />} 
+            />
+            <Route 
+              path="/add-evento" 
+              element={<PrivateRoute element={<CadastroEvento />} />} 
+            />
+            <Route 
+              path="/" 
+              element={<PrivateRoute element={<Dashboard username={username} eventos={eventos} isAdmin={isAdmin} />} />} 
+            />
+          </Routes>
+        </div>
+      </Router>
+    </AuthProvider>
   );
 }
 

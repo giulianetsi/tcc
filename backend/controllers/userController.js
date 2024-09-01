@@ -135,7 +135,7 @@ const loginUser = async (req, res) => {
   const { login, senha } = req.body;
 
   try {
-    const [user] = await db.execute('SELECT * FROM usuarios WHERE login = ? OR cpf = ?', [login, login]);
+    const [user] = await db.execute('SELECT id, senha, tipo FROM usuarios WHERE login = ? OR cpf = ?', [login, login]);
 
     if (user.length === 0) {
       return res.status(401).json({ message: 'Usuário não encontrado' });
@@ -147,21 +147,30 @@ const loginUser = async (req, res) => {
       return res.status(401).json({ message: 'Senha inválida' });
     }
 
-    const token = jwt.sign({ userId: user[0].id }, 'your_jwt_secret', { expiresIn: '1h' });
+    const token = jwt.sign({ userId: user[0].id, tipo: user[0].tipo }, 'your_jwt_secret', { expiresIn: '1h' });
 
     res.cookie('token', token, { httpOnly: true, secure: false });
 
     res.status(200).json({
       message: 'Login bem-sucedido',
-      usuario_id: user[0].id  
+      usuario_id: user[0].id,
+      tipo: user[0].tipo, // Retorna o tipo de usuário
+      token // Envia o token no corpo da resposta
     });
   } catch (error) {
     res.status(500).json({ message: 'Erro ao fazer login', error });
   }
 };
 
+const logoutUser = (req, res) => {
+  res.clearCookie('token');
+  res.status(200).json({ message: 'Logout bem-sucedido' });
+};
+
+
 module.exports = {
   registerUser,
   loginUser,
+  logoutUser,
   subscribe
 };

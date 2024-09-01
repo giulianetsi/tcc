@@ -10,49 +10,52 @@ const Login = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-  
+
     try {
+      // Enviar dados de login para o backend
       const response = await axios.post('http://localhost:5000/api/users/login', { login, senha }, { withCredentials: true });
       console.log('Login:', response.data);
-  
-      const usuario_id = response.data.usuario_id;
-      if (!usuario_id) {
-        throw new Error('Usuário ID não disponível');
+
+      // Verificar se o token de autenticação foi retornado
+      const { token, usuario_id } = response.data;
+      if (!token || !usuario_id) {
+        throw new Error('Token ou Usuário ID não disponível');
       }
-  
+
+      // Armazenar o token no localStorage ou cookie
+      localStorage.setItem('authToken', token);
+      localStorage.setItem('usuario_id', usuario_id);
+
+      // Registrar o service worker e inscrever o usuário para notificações push
       if ('serviceWorker' in navigator) {
-        const register = await navigator.serviceWorker.register('/service-worker.js');
+        const register = await navigator.serviceWorker.ready;
         const subscription = await register.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
         });
-  
-        console.log('Subscription:', subscription);
-  
-        // Tente obter as chaves diretamente usando o método `getKey`
-        const p256dh = subscription.getKey('p256dh') ? btoa(String.fromCharCode.apply(null, new Uint8Array(await subscription.getKey('p256dh')))) : null;
-        const auth = subscription.getKey('auth') ? btoa(String.fromCharCode.apply(null, new Uint8Array(await subscription.getKey('auth')))) : null;
-  
+
+        const p256dh = subscription.getKey('p256dh') ? btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))) : null;
+        const auth = subscription.getKey('auth') ? btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth')))) : null;
+
         if (p256dh && auth) {
-          const subscribeResponse = await axios.post('http://localhost:5000/api/users/subscribe', {
+          await axios.post('http://localhost:5000/api/users/subscribe', {
             endpoint: subscription.endpoint,
             keys: {
-              p256dh: p256dh,
-              auth: auth
+              p256dh,
+              auth
             },
-            usuario_id: usuario_id
+            usuario_id
           }, {
             headers: {
               'Content-Type': 'application/json'
             }
           });
-  
-          console.log('Subscription response:', subscribeResponse.data);
         } else {
           throw new Error('Propriedades de chave da inscrição não encontradas');
         }
       }
-  
+
+      // Redirecionar para a página inicial após login
       window.location.href = '/';
     } catch (error) {
       console.error('Erro no login ou subscription:', error);

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Modal from 'react-modal';
 import '../App.css';
 import { FaEdit, FaTrashAlt, FaPlus } from 'react-icons/fa';
@@ -25,6 +26,8 @@ const Dashboard = ({ username, eventos, isAdmin }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [eventsPerPage, setEventsPerPage] = useState(16);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const navigate = useNavigate();
 
   const openModal = (evento) => {
     setSelectedEvento(evento);
@@ -49,10 +52,30 @@ const Dashboard = ({ username, eventos, isAdmin }) => {
   };
 
   useEffect(() => {
+    // Verificar se o usuário está autenticado
+    const checkAuthentication = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/users/check-auth', {
+          credentials: 'include',
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setIsAuthenticated(data.isAuthenticated);
+        } else {
+          setIsAuthenticated(false);
+          navigate('/login'); // Redireciona para a página de login se não estiver autenticado
+        }
+      } catch (error) {
+        setIsAuthenticated(false);
+        navigate('/login'); // Redireciona para a página de login em caso de erro
+      }
+    };
+
+    checkAuthentication();
     updateEventsPerPage();
     window.addEventListener('resize', updateEventsPerPage);
     return () => window.removeEventListener('resize', updateEventsPerPage);
-  }, []);
+  }, [navigate]);
 
   const totalPages = Math.ceil(eventos.length / eventsPerPage);
 
@@ -61,6 +84,7 @@ const Dashboard = ({ username, eventos, isAdmin }) => {
     currentPage * eventsPerPage
   );
 
+  // Adicionar placeholders até que o número de eventos exibidos atinja o máximo por página
   while (currentEventos.length < eventsPerPage) {
     currentEventos.push({
       id: `placeholder-${currentEventos.length}`,
@@ -82,8 +106,8 @@ const Dashboard = ({ username, eventos, isAdmin }) => {
           &#9776;
         </span>
         <div className={`navbar-links ${menuOpen ? 'active' : ''}`}>
-          <a href="/add-evento">Adicionar Evento</a>
-          <a href="/register-user">Registrar Usuário</a>
+          {isAdmin && <a href="/add-evento">Adicionar Evento</a>}
+          {isAdmin && <a href="/register-user">Registrar Usuário</a>}
           <a href="/logout">Sair</a>
         </div>
       </nav>
@@ -100,8 +124,8 @@ const Dashboard = ({ username, eventos, isAdmin }) => {
               <FaPlus />
             </div>
           )}
-          {currentEventos.map((evento) => (
-            <Evento evento={evento} isAdmin={isAdmin} openModal={openModal} />
+          {currentEventos.map((evento, index) => (
+            <Evento key={index} evento={evento} isAdmin={isAdmin} openModal={openModal} />
           ))}
         </div>
 

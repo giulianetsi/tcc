@@ -154,7 +154,7 @@ const Cadastro = () => {
           </form>
           {successMessage && <p className="text-success mt-3">{successMessage}</p>}
           {errorMessage && <p className="text-danger mt-3">{errorMessage}</p>}
-          <Link to="/dashboard" className="btn btn-secondary btn-block mt-4">Voltar</Link>
+          <Link to="/" className="btn btn-secondary btn-block mt-4">Voltar</Link>
         </div>
       </div>
     </div>
