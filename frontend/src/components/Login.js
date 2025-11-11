@@ -1,75 +1,222 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import logo from '../assets/ifsul-logo.svg';
 
-const publicVapidKey = 'BIDByJJTac6ThaHCPJVS1pszWZVVqvCyCfbL68BEogxfT9MO8Swu5ouZtambPZDgo-cEOMejCAvoViWn6zpX8ig';
+// Read the public VAPID key from the build-time environment variable so builds
+// for production can inject the real key. Keep the existing key as a
+// development fallback only (will be overridden in production builds).
+const publicVapidKey = process.env.REACT_APP_PUBLIC_VAPID_KEY || 'BIDByJJTac6ThaHCPJVS1pszWZVVqvCyCfbL68BEogxfT9MO8Swu5ouZtambPZDgo-cEOMejCAvoViWn6zpX8ig';
 
 const Login = () => {
   const [login, setLogin] = useState('');
   const [senha, setSenha] = useState('');
   const [message, setMessage] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const navigate = useNavigate();
+  const { login: authenticate, isAuthenticated } = useAuth();
+
+  // Redirecionar se já estiver autenticado
+  useEffect(() => {
+    if (isAuthenticated) {
+      console.log('Usuário já autenticado, redirecionando...');
+      navigate('/', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
 
     try {
       // Enviar dados de login para o backend
+      console.log('Enviando dados para login:', { login, senha });
       const response = await axios.post('http://localhost:5000/api/users/login', { login, senha }, { withCredentials: true });
-      console.log('Login:', response.data);
+      console.log('Resposta do servidor:', response.data);
+      console.log('Status da resposta:', response.status);
 
       // Verificar se o token de autenticação foi retornado
-      const { token, usuario_id } = response.data;
-      if (!token || !usuario_id) {
+      const { token, user_id, user_type, user_first_name, user_last_name, permissions } = response.data;
+      if (!token || !user_id) {
         throw new Error('Token ou Usuário ID não disponível');
       }
 
-      // Armazenar o token no localStorage ou cookie
+      // Armazenar o token e informações do usuário no localStorage
       localStorage.setItem('authToken', token);
-      localStorage.setItem('usuario_id', usuario_id);
+      localStorage.setItem('user_id', user_id);
+      localStorage.setItem('user_type', user_type);
+      localStorage.setItem('user_first_name', user_first_name || '');
+      localStorage.setItem('user_last_name', user_last_name || '');
+      localStorage.setItem('permissions', JSON.stringify(permissions));
 
-      // Registrar o service worker e inscrever o usuário para notificações push
-      if ('serviceWorker' in navigator) {
-        const register = await navigator.serviceWorker.ready;
-        const subscription = await register.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-        });
+      // Atualizar o estado de autenticação
+      authenticate();
 
-        const p256dh = subscription.getKey('p256dh') ? btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))) : null;
-        const auth = subscription.getKey('auth') ? btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth')))) : null;
-
-        if (p256dh && auth) {
-          await axios.post('http://localhost:5000/api/users/subscribe', {
-            endpoint: subscription.endpoint,
-            keys: {
-              p256dh,
-              auth
-            },
-            usuario_id
-          }, {
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          });
-        } else {
-          throw new Error('Propriedades de chave da inscrição não encontradas');
-        }
+      // Tentar registrar para notificações push (não crítico)
+      console.log('Iniciando processo de notificações push...');
+      
+      // Verificar se o usuário já decidiu sobre notificações antes (específico por usuário)
+      const notificationDecisionKey = `notificationDecision_${user_id}`;
+      const notificationDecision = localStorage.getItem(notificationDecisionKey);
+      console.log('Decisão anterior sobre notificações para usuário', user_id, ':', notificationDecision);
+      
+      // Se já foi decidido (granted, denied, ou dismissed), não perguntar novamente
+      if (notificationDecision && notificationDecision !== 'default') {
+        console.log('Usuário já decidiu sobre notificações, pulando...');
+        setTimeout(() => {
+          navigate('/', { replace: true });
+        }, 100);
+        return;
+      }
+      
+      // Verificar se notificações são suportadas
+      if (!('Notification' in window)) {
+        console.log('Este navegador não suporta notificações');
+        setTimeout(() => {
+          navigate('/', { replace: true });
+        }, 100);
+        return;
+      }
+      
+      // Verificar se service worker é suportado
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        console.log('Push notifications não suportadas neste navegador');
+        setTimeout(() => {
+          navigate('/', { replace: true });
+        }, 100);
+        return;
       }
 
+      try {
+        console.log('Service Worker e PushManager disponíveis');
+        
+        // Primeiro registrar/aguardar service worker estar pronto
+        let registration;
+        try {
+          registration = await navigator.serviceWorker.register('/service-worker.js');
+          console.log('Service Worker registrado:', registration);
+          
+          // Aguardar que esteja realmente ativo
+          await navigator.serviceWorker.ready;
+          console.log('Service Worker pronto para uso');
+        } catch (swError) {
+          console.error('Erro ao registrar service worker:', swError);
+          setTimeout(() => {
+            navigate('/', { replace: true });
+          }, 100);
+          return;
+        }
+        
+        // Verificar permissão atual
+        let permission = Notification.permission;
+        console.log('Permissão atual para notificações:', permission);
+        
+        // Se ainda não foi solicitada, solicitar agora
+        if (permission === 'default') {
+          console.log('Solicitando permissão para notificações...');
+          permission = await Notification.requestPermission();
+          console.log('Nova permissão para notificações:', permission);
+          
+          // Salvar a decisão do usuário (específico por usuário)
+          localStorage.setItem(notificationDecisionKey, permission);
+        }
+        
+        if (permission === 'granted') {
+          console.log('Permissão concedida, criando subscription...');
+          
+          // Verificar se já existe uma subscription
+          let subscription = await registration.pushManager.getSubscription();
+          console.log('Subscription existente:', subscription);
+          
+          if (!subscription) {
+            console.log('Criando nova subscription...');
+            try {
+              subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+              });
+              console.log('Nova subscription criada:', subscription);
+            } catch (subscribeError) {
+              console.error('Erro ao criar subscription:', subscribeError);
+              // Continuar com login mesmo sem subscription
+              setTimeout(() => {
+                navigate('/', { replace: true });
+              }, 100);
+              return;
+            }
+          }
+
+          if (subscription) {
+            console.log('Enviando subscription para o servidor...');
+            try {
+              const p256dh = subscription.getKey('p256dh') ? btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('p256dh')))) : null;
+              const auth = subscription.getKey('auth') ? btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth')))) : null;
+
+              if (p256dh && auth) {
+                await axios.post('http://localhost:5000/api/users/subscribe', {
+                  endpoint: subscription.endpoint,
+                  keys: {
+                    p256dh,
+                    auth
+                  },
+                  user_id
+                }, {
+                  headers: {
+                    'Content-Type': 'application/json'
+                  }
+                });
+                console.log('✅ Notificações push configuradas com sucesso!');
+              } else {
+                console.error('Erro: Chaves da subscription não encontradas');
+              }
+            } catch (serverError) {
+              console.error('Erro ao enviar subscription para servidor:', serverError);
+              // Continuar mesmo com erro no servidor
+            }
+          }
+        } else if (permission === 'denied') {
+          console.log('❌ Permissão para notificações negada pelo usuário');
+        } else {
+          console.log('⚠️ Permissão para notificações não solicitada ainda');
+        }
+        
+      } catch (pushError) {
+        console.warn('Erro geral ao configurar notificações push:', pushError);
+      }
+      
+      // Sempre continuar com o login
+      console.log('Finalizando processo de push notifications...');
+
       // Redirecionar para a página inicial após login
-      window.location.href = '/';
+      console.log('Login completo, redirecionando para a página inicial...');
+      console.log('Estado de autenticação antes do redirect:', localStorage.getItem('authToken') ? 'autenticado' : 'não autenticado');
+      
+      // Pequeno delay para garantir que tudo foi salvo
+      setTimeout(() => {
+        navigate('/', { replace: true });
+      }, 100);
+      
     } catch (error) {
-      console.error('Erro no login ou subscription:', error);
+      console.error('Erro completo:', error);
+      console.error('Resposta do servidor:', error.response);
       if (error.response) {
-        setMessage(error.response.data.message);
+        console.error('Status do erro:', error.response.status);
+        console.error('Dados do erro:', error.response.data);
+        setMessage(error.response.data.message || 'Erro no servidor');
+      } else if (error.request) {
+        console.error('Erro de conexão:', error.request);
+        setMessage('Erro de conexão com o servidor');
       } else {
-        setMessage('Erro no servidor');
+        console.error('Erro desconhecido:', error.message);
+        setMessage(error.message || 'Erro desconhecido');
       }
     }
   };
 
   const urlBase64ToUint8Array = (base64String) => {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+  // Hyphen does not need escaping outside character classes — remove unnecessary escape
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
     const rawData = window.atob(base64);
     const outputArray = new Uint8Array(rawData.length);
 
@@ -80,38 +227,70 @@ const Login = () => {
   };
 
   return (
-    <div className="container centered-form">
+    <div className="container centered-form login-page">
       <div className="row justify-content-center">
-        <div className="col-md-4">
-          <h1 className="text-center my-4">Login</h1>
-          <form onSubmit={handleLogin}>
-            <div className="form-group">
-              <label htmlFor="username">Usuário</label>
-              <input 
-                type="text" 
-                id="username" 
-                name="login" 
-                className="form-control" 
-                value={login}
-                onChange={(e) => setLogin(e.target.value)}
-                required 
-              />
+        <div className="col-12 col-sm-10 col-md-6 col-lg-4">
+          <div className="text-center mb-4">
+            <img src={logo} alt="IFSUL" className="login-logo" />
+          </div>
+
+          <div className="card login-card shadow-sm">
+            <div className="card-body">
+              <form onSubmit={handleLogin}>
+                <div className="mb-3 username-field">
+                  <label className="form-label login-label" htmlFor="username">Usuário</label>
+                  <input
+                    type="text"
+                    id="username"
+                    name="login"
+                    className="form-control"
+                    value={login}
+                    onChange={(e) => setLogin(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="mb-3">
+                  <label className="form-label login-label" htmlFor="password">Senha</label>
+                  <div className="password-wrapper">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      id="password"
+                      name="senha"
+                      className="form-control"
+                      value={senha}
+                      onChange={(e) => setSenha(e.target.value)}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle"
+                      aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                      onClick={() => setShowPassword(s => !s)}
+                    >
+                      {showPassword ? (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                          <path d="M3 3L21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M10.58 10.58a3 3 0 104.24 4.24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      ) : (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                          <path d="M1 12C1 12 5 4 12 4s11 8 11 8-4 8-11 8S1 12 1 12z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="login-submit">
+                  <button type="submit" className="btn btn-custom-primary">Acessar</button>
+                </div>
+              </form>
+              {message && <p className="mt-3 text-center text-danger">{message}</p>}
             </div>
-            <div className="form-group">
-              <label htmlFor="password">Senha</label>
-              <input 
-                type="password" 
-                id="password" 
-                name="senha" 
-                className="form-control" 
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                required 
-              />
-            </div>
-            <button type="submit" className="btn btn-primary btn-block">Entrar</button>
-          </form>
-          {message && <p className="mt-3 text-center">{message}</p>}
+          </div>
+
         </div>
       </div>
     </div>

@@ -1,0 +1,30 @@
+.ios-install-hint {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 20px;
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+}
+.ios-install-content {
+  background: rgba(255,255,255,0.98);
+  border: 1px solid #ddd;
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+  max-width: 720px;
+  width: 100%;
+  font-size: 14px;
+  color: #222;
+}
+.ios-install-content p { margin: 8px 0 0 0; }
+.ios-install-dismiss {
+  margin-top: 8px;
+  background: #91D050;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #fff;
+}

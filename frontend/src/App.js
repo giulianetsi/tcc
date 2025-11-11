@@ -5,80 +5,112 @@ import Login from './components/Login';
 import Cadastro from './components/Cadastro';
 import CadastroEvento from './components/CadastroEvento';
 import Dashboard from './components/Dashboard';
+import GerenciarGrupos from './components/GerenciarGrupos'; // Importar componente de grupos
+import GroupMembers from './components/GroupMembers';
+import ManagePermissions from './components/ManagePermissions';
+import UserProfile from './components/UserProfile';
 import './App.css';
+import IosInstallHint from './components/IosInstallHint';
+import TopNav from './components/TopNav';
+import { useLocation } from 'react-router-dom';
 import PrivateRoute from './components/PrivateRoute';
 import { AuthProvider } from './context/AuthContext';
 
-const publicVapidKey = "BIDByJJTac6ThaHCPJVS1pszWZVVqvCyCfbL68BEogxfT9MO8Swu5ouZtambPZDgo-cEOMejCAvoViWn6zpX8ig";
-
-async function subscribeUser() {
-  if ('serviceWorker' in navigator) {
+// Função para obter dados do usuário logado (escopo de módulo para ser reutilizável)
+const getUserData = () => {
+  const userTypeId = localStorage.getItem('user_type_id');
+  const userType = localStorage.getItem('user_type');
+  const firstName = localStorage.getItem('user_first_name');
+  const lastName = localStorage.getItem('user_last_name');
+  const permissions = localStorage.getItem('permissions');
+  
+  let username = 'Usuário';
+  let isAdmin = false;
+  
+  if (permissions) {
     try {
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription() || await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
-      });
-
-      await fetch('http://localhost:5000/api/subscribe', {
-        method: 'POST',
-        body: JSON.stringify(subscription),
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      console.log('Subscription enviada ao servidor com sucesso');
-    } catch (error) {
-      console.error('Erro ao se inscrever:', error);
+      const perms = JSON.parse(permissions);
+      // Consider user an admin for UI purposes if they have broad management permissions.
+      // Prefer explicit canCreateUser or canViewAllEvents to avoid relying on numeric IDs.
+      isAdmin = Boolean(perms.canCreateUser || perms.can_create_user || perms.canViewAllEvents || perms.can_view_all_events);
+    } catch (e) {
+      console.log('Erro ao parsear permissões:', e);
     }
   }
-}
-
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
+  
+  // Preferir usar o nome real do usuário se disponível
+  if (firstName) {
+    username = `${firstName}${lastName ? ` ${lastName}` : ''}`;
+  } else {
+    // Fallback para tipo de usuário se nome não disponível
+    // Prefer user_type_id numeric mapping if available
+    if (userTypeId) {
+      switch(Number(userTypeId)) {
+        case 1:
+          username = 'Administrador';
+          break;
+        case 2:
+          username = 'Professor';
+          break;
+        case 3:
+          username = 'Estudante';
+          break;
+        case 4:
+          username = 'Responsável';
+          break;
+        default:
+          username = 'Usuário';
+      }
+      // Numeric fallback: if ever mapped, treat 1 as admin
+      if (Number(userTypeId) === 1) isAdmin = true;
+    } else {
+      switch(userType) {
+        case 'admin':
+          username = 'Administrador';
+          break;
+        case 'teacher':
+          username = 'Professor';
+          break;
+        case 'student':
+          username = 'Estudante';
+          break;
+        case 'guardian':
+          username = 'Responsável';
+          break;
+        default:
+          username = 'Usuário';
+      }
+      // If textual user_type indicates admin, set isAdmin as well
+      if (userType === 'admin') isAdmin = true;
+    }
   }
-  return outputArray;
-}
+  
+  return { username, isAdmin };
+};
 
 function App() {
-  useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        try {
-          navigator.serviceWorker.register('/service-worker.js').then((registration) => {
-            console.log('Service Worker registrado com sucesso com o escopo:', registration.scope);
-            subscribeUser();
-          }).catch(error => {
-            console.error('Falha ao registrar o Service Worker:', error);
-          });
-        } catch (error) {
-          console.error('Erro ao registrar o Service Worker:', error);
-        }
-      });
-    }
-  }, []);
 
-  const eventos = [
-    { id: 1, titulo: 'Alerta 1', texto: 'Texto do alerta 1', data: '2024-07-16', hora: '14:00', local: 'Sala 1', tipo: 'Tipo1', icone: 'aviso' },
-    { id: 2, titulo: 'Alerta 2', texto: 'Texto do alerta 2', data: '2024-07-17', hora: '10:00', local: 'Sala 2', tipo: 'Tipo2', icone: 'evento' },
-    { id: 3, titulo: 'Alerta 3', texto: 'Texto do alerta 3', data: '2024-07-18', hora: '08:00', local: 'Sala 3', tipo: 'Tipo3', icone: 'reuniao' },
-  ];
-  
-  const username = 'João Silva';
-  const isAdmin = true;
+  useEffect(() => {
+    console.log('App carregado - Service Worker será registrado durante o login');
+  }, []);
 
   return (
     <AuthProvider>
       <Router>
-        <div className="App">
-          <Routes>
+        <AppInner />
+      </Router>
+    </AuthProvider>
+  );
+}
+
+function AppInner() {
+  const location = useLocation();
+  const showTopNav = location.pathname !== '/login';
+  return (
+    <div className="App">
+      <IosInstallHint />
+      {showTopNav && <TopNav />}
+      <Routes>
             <Route path="/login" element={<Login />} />
             <Route 
               path="/register-user" 
@@ -89,13 +121,38 @@ function App() {
               element={<PrivateRoute element={<CadastroEvento />} />} 
             />
             <Route 
+              path="/gerenciar-grupos" 
+              element={<PrivateRoute element={<GerenciarGrupos />} />} 
+            />
+            <Route
+              path="/gerenciar-grupos/:groupId/membros"
+              element={<PrivateRoute element={<GroupMembers />} />}
+            />
+            <Route 
+              path="/manage-permissions" 
+              element={<PrivateRoute element={<ManagePermissions />} />} 
+            />
+            <Route 
+              path="/profile"
+              element={<PrivateRoute element={<UserProfile />} />}
+            />
+            <Route 
               path="/" 
-              element={<PrivateRoute element={<Dashboard username={username} eventos={eventos} isAdmin={isAdmin} />} />} 
+              element={<PrivateRoute element={(() => {
+                const userData = getUserData();
+                return <Dashboard username={userData.username} isAdmin={userData.isAdmin} />;
+              })()} />} 
+            />
+            {/* Rota fallback para qualquer URL não encontrada */}
+            <Route 
+              path="*" 
+              element={<PrivateRoute element={(() => {
+                const userData = getUserData();
+                return <Dashboard username={userData.username} isAdmin={userData.isAdmin} />;
+              })()} />} 
             />
           </Routes>
-        </div>
-      </Router>
-    </AuthProvider>
+      </div>
   );
 }
 

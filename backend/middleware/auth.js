@@ -1,0 +1,96 @@
+const jwt = require('jsonwebtoken');
+
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = (authHeader && authHeader.split(' ')[1]) || (req.cookies && req.cookies.token);
+
+  if (!token) {
+    return res.status(401).json({ message: 'Token de acesso requerido' });
+  }
+
+  try {
+    const jwtSecret = process.env.JWT_SECRET || 'your_jwt_secret';
+    const decoded = jwt.verify(token, jwtSecret);
+    req.user = decoded;
+    // Logar informações mínimas do token decodificado (evitar imprimir segredos)
+    console.log('authenticateToken: usuário decodificado do token:', { userId: decoded.userId, userTypeId: decoded.userTypeId, userType: decoded.userType });
+    next();
+  } catch (error) {
+    console.warn('authenticateToken: verificação do token falhou:', error.message);
+    return res.status(403).json({ message: 'Token inválido' });
+  }
+};
+
+const checkPermission = (permission) => {
+  return (req, res, next) => {
+    if (!req.user || !req.user.permissions) {
+      return res.status(403).json({ message: 'Permissões não encontradas' });
+    }
+
+  // Suporta chaves de permissão tanto em snake_case quanto em camelCase
+    const altKey = permission.replace(/([A-Z])/g, '_$1').toLowerCase();
+    const hasPermission = req.user.permissions[permission] || req.user.permissions[altKey];
+
+    if (!hasPermission) {
+      return res.status(403).json({ message: 'Acesso negado: permissão insuficiente' });
+    }
+
+    next();
+  };
+};
+
+// Exigir que o usuário seja administrador (com base em userType do token)
+const requireAdmin = (req, res, next) => {
+  // Preferir userTypeId numérico quando disponível (o mapeamento no DB pode usar valores numéricos)
+  const userTypeId = req.user?.userTypeId || (req.user && req.user.userTypeId);
+  const userType = req.user?.userType || (req.user && req.user.userType);
+
+  if (!userType && !userTypeId) return res.status(403).json({ message: 'Tipo de usuário não encontrado' });
+
+  // Permitir admin se o ID numérico corresponder a 1
+  // Preferir verificar permissões no token
+  const perms = req.user && req.user.permissions;
+  if (perms && (perms.canViewAllEvents || perms.can_create_user || perms.canCreateUser)) return next();
+
+  // Fallbacks numéricos/textuais
+  if (userTypeId && Number(userTypeId) === 1) return next();
+  if (userType && String(userType).toLowerCase() === 'admin') return next();
+
+  console.warn('requireAdmin denied, req.user:', { userTypeId, userType, user: req.user });
+  return res.status(403).json({ message: 'Acesso negado: administrador requerido' });
+
+  next();
+};
+
+// Observação: para permitir expansão futura para tipos de usuário arbitrários que possam
+// criar eventos, o sistema usa um objeto de permissões no token (req.user.permissions).
+// Use `checkPermission('canCreateEvent')` ao proteger rotas para que cada tipo de usuário
+// possa ser configurado com essa permissão no banco sem alterar o código.
+
+module.exports = {
+  authenticateJWT: authenticateToken, // Alias para compatibilidade
+  authenticateToken,
+  checkPermission,
+  requireAdmin,
+  // allowCreateUser: permitir admin OU qualquer tipo de usuário que possua a permissão canCreateUser
+  allowCreateUser: (req, res, next) => {
+    try {
+      const userTypeId = req.user?.userTypeId || (req.user && req.user.userTypeId);
+      const userType = req.user?.userType || (req.user && req.user.userType);
+
+  // Preferir flag de permissão
+    const perms2 = req.user && req.user.permissions;
+    const hasCanCreateUser = perms2 && (perms2.canCreateUser || perms2.can_create_user);
+    if (hasCanCreateUser) return next();
+
+    // Fallbacks numéricos/textuais
+    if (userTypeId && Number(userTypeId) === 1) return next();
+    if (userType && String(userType).toLowerCase() === 'admin') return next();
+
+    return res.status(403).json({ message: 'Acesso negado: permissão canCreateUser requerida' });
+    } catch (err) {
+      console.warn('allowCreateUser: erro no middleware:', err && err.message);
+      return res.status(500).json({ message: 'Erro interno ao verificar permissão' });
+    }
+  }
+};
