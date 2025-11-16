@@ -33,17 +33,17 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
   const [eventos, setEventos] = useState(eventosProp); // Estado para eventos carregados do banco
   const [viewingAs, setViewingAs] = useState(null);
   const [loading, setLoading] = useState(true);
-  // Date filter state
+  // Estado do filtro de datas
   const [dateFilterOpen, setDateFilterOpen] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [filterTick, setFilterTick] = useState(0); // toggled when Apply is clicked to ensure re-render
+  const [filterTick, setFilterTick] = useState(0); // alternado quando "Aplicar" é clicado para garantir re-render
   const dateFilterRef = useRef(null);
   const startInputRef = useRef(null);
   const navigate = useNavigate();
   const { logout, isAuthenticated } = useAuth();
 
-  // Prefer explicit permissions to decide admin-like UI power. Fallback to textual user_type or numeric id.
+  // Preferir permissões explícitas para decidir poderes de interface de administrador. Como fallback, usar user_type textual ou id numérico.
   const getIsAdmin = () => {
     try {
       const permissions = localStorage.getItem('permissions');
@@ -63,22 +63,22 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
 
   const isAdmin = getIsAdmin();
 
-  // Detect if current user is a 'responsável' (guardian)
+  // Detectar se o usuário atual é um 'responsável' (guardian)
   const getIsResponsavel = () => {
     try {
       const userTypeId = localStorage.getItem('user_type_id');
       const userType = localStorage.getItem('user_type');
       if (userType === 'responsavel' || userType === 'guardian') return true;
       if (userTypeId && Number(userTypeId) === 4) return true;
-    } catch (e) {
-      // ignore
+      } catch (e) {
+      // ignorar erros de leitura de localStorage
     }
     return false;
   };
 
   const isResponsavel = getIsResponsavel();
 
-  // Username local derivation: read directly from localStorage so it updates after login/logout
+  // Derivação do nome de usuário local: ler diretamente do localStorage para atualizar após login/logout
   const [localUsername, setLocalUsername] = useState(username || 'Usuário');
 
   const computeUsername = () => {
@@ -126,7 +126,7 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
   const carregarEventos = async () => {
     try {
       setLoading(true);
-      // Backend stores auth token in httpOnly cookie; use api instance withCredentials
+  // O backend armazena o token de autenticação em cookie httpOnly; usar a instância api comCredentials
       const response = await api.get('/events');
 
       console.log('Eventos carregados:', response.data);
@@ -148,7 +148,7 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
         logout();
         navigate('/login');
       } else {
-        setEventos([]); // Fallback para array vazio
+  setEventos([]); // Retorno padrão para array vazio
       }
     } finally {
       setLoading(false);
@@ -171,7 +171,7 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
     };
   }, []); // Executar apenas uma vez ao montar
 
-  // Close the date filter panel when clicking outside or pressing Escape
+  // Fechar o painel de filtro de datas ao clicar fora ou pressionar Escape
   useEffect(() => {
     if (!dateFilterOpen) return;
     const handleDocClick = (e) => {
@@ -192,10 +192,10 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
     };
   }, [dateFilterOpen]);
 
-  // When opening the date filter, focus the start date field for faster interaction
+  // Ao abrir o filtro de datas, focar o campo de data inicial para interação mais rápida
   useEffect(() => {
     if (dateFilterOpen) {
-      // short timeout to wait for panel render
+  // pequeno timeout para aguardar a renderização do painel
       const t = setTimeout(() => {
         try { startInputRef.current && startInputRef.current.focus(); } catch {}
       }, 80);
@@ -203,7 +203,7 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
     }
   }, [dateFilterOpen]);
 
-  // Derive the list of available tipos from eventos so the select lists real types
+  // Derivar a lista de tipos disponíveis a partir dos eventos para que o select mostre tipos reais
   const eventTypes = useMemo(() => {
     try {
       const s = new Set();
@@ -223,20 +223,20 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
     setModalIsOpen(true);
   };
 
-  // Derived list: apply filtroAtivo and date filter
-  // Helper: robustly parse event date strings (handles 'YYYY-MM-DD' and ISO timestamps)
+  // Lista derivada: aplicar filtroAtivo e o filtro de data
+  // Auxiliar: parsear robustamente strings de data de eventos (suporta 'YYYY-MM-DD' e timestamps ISO)
   const parseEventDate = (dateStr) => {
     if (!dateStr) return null;
-    // If date already in YYYY-MM-DD format or similar, new Date(...) works in modern browsers
-    // Try to normalize: if it contains a space, replace with 'T' to parse as ISO; if it contains only date, append T00:00:00
+  // Se a data já estiver em formato YYYY-MM-DD ou similar, new Date(...) funciona nos navegadores modernos
+  // Tentar normalizar: se contiver espaço, substituir por 'T' para parsear como ISO; se contiver apenas a data, anexar T00:00:00
     try {
       if (typeof dateStr !== 'string') return null;
       const s = dateStr.trim();
-      // If looks like YYYY-MM-DD optionally with time
+  // Se tiver o formato YYYY-MM-DD (opcionalmente com horário)
       if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
         return new Date(s + 'T00:00:00');
       }
-      // If looks like DD/MM/YYYY or DD/MM/YYYY HH:MM (pt-BR local date used by backend)
+  // Se tiver o formato DD/MM/YYYY ou DD/MM/YYYY HH:MM (formato pt-BR possivelmente vindo do backend)
       if (/^\d{2}\/\d{2}\/\d{4}(?:\s+\d{2}:\d{2})?$/.test(s)) {
         const parts = s.split(' ');
         const dateParts = parts[0].split('/'); // DD/MM/YYYY
@@ -251,7 +251,7 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
         }
         return new Date(year, month, day, hours, minutes);
       }
-      // Accept DD-MM-YYYY as well
+  // Aceitar também formato DD-MM-YYYY
       if (/^\d{2}-\d{2}-\d{4}(?:\s+\d{2}:\d{2})?$/.test(s)) {
         const parts = s.split(' ');
         const dateParts = parts[0].split('-'); // DD-MM-YYYY
@@ -266,11 +266,11 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
         }
         return new Date(year, month, day, hours, minutes);
       }
-      // If contains space between date and time, replace with T
+  // Se contiver espaço entre data e hora, substituir por 'T'
       if (/^\d{4}-\d{2}-\d{2} /.test(s)) {
         return new Date(s.replace(' ', 'T'));
       }
-      // Otherwise try direct parse
+  // Caso contrário, tentar parse direto
       const d = new Date(s);
       if (!isNaN(d.getTime())) return d;
     } catch (err) {
@@ -279,7 +279,7 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
     return null;
   };
   const eventosFiltradosPorTipoEData = () => {
-    // First filter by tipo (filtroAtivo)
+  // Primeiro filtrar por tipo (filtroAtivo)
     let list = eventos || [];
     if (filtroAtivo && filtroAtivo !== 'todos') {
       const fa = String(filtroAtivo).toLowerCase();
@@ -287,45 +287,45 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
         const tipoRaw = e?.tipo || e?.type || '';
         const tipo = String(tipoRaw || '').toLowerCase();
         if (!tipo) return false;
-        // Keep backward-compatible categories
+  // Manter categorias compatíveis com versões anteriores
         if (fa === 'eventos') return tipo.includes('evento') || tipo === 'tipo' || tipo === 'tipo1';
         if (fa === 'reunioes') return tipo.includes('reun');
         if (fa === 'avisos') return tipo.includes('aviso');
-        // Otherwise match by exact or included substring of the event type
+  // Caso contrário, comparar por igualdade ou substring do tipo do evento
         return tipo === fa || tipo.includes(fa) || fa.includes(tipo);
       });
     }
 
-    // Then filter by date
-    // If both startDate and endDate are empty -> default behavior: only future events
+  // Em seguida, filtrar por data
+  // Se startDate e endDate estiverem vazios -> comportamento padrão: apenas eventos futuros
     const hasDateRange = startDate || endDate;
     const isTodayInEvent = (ev) => {
       if (!ev) return false;
-        // If single date (possibly with time)
+  // Se for data única (possivelmente com horário)
         if (ev.event_datetime_raw) {
           const evDate = parseEventDate(ev.event_datetime_raw);
           if (!evDate) return false;
           const now = new Date();
-          // If event includes time, consider exact datetime window: show when now is >= event start and <= event start + 60 minutes
+          // Se o evento incluir horário, considerar uma janela de datetime exata: mostrar quando now >= início do evento e <= início + 60 minutos
           const hasTime = /T/.test(ev.event_datetime_raw) || /:\d{2}$/.test(ev.hora || '') || (ev.hora && ev.hora.includes(':'));
           if (hasTime) {
             const windowStart = evDate.getTime();
-            const windowEnd = windowStart + (60 * 60 * 1000); // 1 hour window
+            const windowEnd = windowStart + (60 * 60 * 1000); // janela de 1 hora
             return now.getTime() >= windowStart && now.getTime() <= windowEnd;
           }
-          // If no explicit time, show on the same day
+          // Se não houver horário explícito, mostrar no mesmo dia
           const evDay = new Date(evDate.getFullYear(), evDate.getMonth(), evDate.getDate());
           const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
           return evDay.getTime() === today.getTime();
         }
-      // If period
+  // Se for um período
       const ps = ev.data_period_start || ev.period_start || ev.data_periodo_inicio || '';
       const pe = ev.data_period_end || ev.period_end || ev.data_periodo_fim || '';
       if (ps || pe) {
         const start = parseEventDate(ps) || null;
         const end = parseEventDate(pe) || null;
         const now = new Date();
-        // If period includes times, compare full datetimes; otherwise compare by day.
+  // Se o período incluir horários, comparar datetimes completos; caso contrário comparar por dia.
         const startHasTime = ps && /T|:\d{2}/.test(String(ps));
         const endHasTime = pe && /T|:\d{2}/.test(String(pe));
         if (startHasTime || endHasTime) {
@@ -345,12 +345,12 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       return list.filter(ev => {
-        // If event is marked 'mostrar_apenas_na_data' -> show only when today's within date/period
+  // Se o evento estiver marcado 'mostrar_apenas_na_data' -> mostrar somente quando hoje estiver dentro da data/período
         if (typeof ev?.mostrar_apenas_na_data !== 'undefined' && ev.mostrar_apenas_na_data) {
           return isTodayInEvent(ev);
         }
 
-        // Support single-date events (ev.data) and period events (data_period_start/data_period_end)
+  // Suportar eventos de data única (ev.data) e eventos por período (data_period_start/data_period_end)
         if (ev.data) {
           const evDate = parseEventDate(ev.data);
           if (!evDate) return false;
@@ -358,13 +358,13 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
           return evDay >= today;
         }
 
-        // period support: include if period end is today or in the future
+  // Suporte a períodos: incluir se o fim do período for hoje ou no futuro
         const ps = ev.data_period_start || ev.period_start || ev.data_periodo_inicio || '';
         const pe = ev.data_period_end || ev.period_end || ev.data_periodo_fim || '';
         if (ps || pe) {
           const start = parseEventDate(ps) || null;
           const end = parseEventDate(pe) || null;
-          // If we have an end date, check end >= today; otherwise if only start, check start >= today
+          // Se tivermos uma data de fim, verificar end >= hoje; caso contrário, se somente start, verificar start >= hoje
           if (end && !isNaN(end.getTime())) {
             const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
             return endDay >= today;
@@ -379,13 +379,13 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
       });
     }
 
-    // If at least one date provided, interpret missing startDate as -infinity and missing endDate as +infinity
+  // Se ao menos uma data for fornecida, interpretar startDate ausente como -infinito e endDate ausente como +infinito
     const start = startDate ? new Date(startDate + 'T00:00:00') : new Date(-8640000000000000);
     const end = endDate ? new Date(endDate + 'T23:59:59') : new Date(8640000000000000);
 
     return list.filter(ev => {
-      // If event is a period, include when the period overlaps the [start, end] range
-      // If event is marked 'mostrar_apenas_na_data', only include when its date/period overlaps the range
+  // Se o evento for um período, incluir quando o período sobrepor o intervalo [start, end]
+  // Se o evento estiver marcado 'mostrar_apenas_na_data', incluir somente se sua data/período sobrepor o intervalo
       if (typeof ev?.mostrar_apenas_na_data !== 'undefined' && ev.mostrar_apenas_na_data) {
         const ps = ev.data_period_start || ev.period_start || ev.data_periodo_inicio || '';
         const pe = ev.data_period_end || ev.period_end || ev.data_periodo_fim || '';
@@ -404,7 +404,7 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
         return false;
       }
 
-      // If not restricted to only-on-date, period events should be included when overlapping range as well
+  // Se não for restrito a apenas-na-data, eventos por período também devem ser incluídos quando sobreporem o intervalo
       const ps = ev.data_period_start || ev.period_start || ev.data_periodo_inicio || '';
       const pe = ev.data_period_end || ev.period_end || ev.data_periodo_fim || '';
       if (ps || pe) {
@@ -415,7 +415,7 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
         return eTime >= start.getTime() && sTime <= end.getTime();
       }
 
-      // Otherwise fall back to single-date logic
+  // Caso contrário, retornar à lógica de data única
       if (!ev.data) return false;
       const evDate = parseEventDate(ev.data);
       if (!evDate) return false;
@@ -435,7 +435,7 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
   const handleLogout = async () => {
     try {
       console.log('Iniciando processo de logout...');
-      // Delegate actual logout actions (local cleanup + server call) to AuthContext.logout
+  // Delegar ações reais de logout (limpeza local + chamada ao servidor) para AuthContext.logout
       await logout();
       console.log('Logout local realizado via AuthContext, redirecionando para login...');
       navigate('/login', { replace: true });
@@ -451,7 +451,7 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
 
   const filtrarEventos = (tipo) => {
     setFiltroAtivo(tipo);
-    setCurrentPage(1); // Resetar para primeira página ao filtrar
+    setCurrentPage(1); // Reiniciar para a primeira página ao filtrar
   };
 
   const updateEventsPerPage = () => {
@@ -478,7 +478,7 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
     currentPage * eventsPerPage
   );
 
-  // Ensure currentPage remains within valid range when filters or page size change
+  // Garantir que currentPage permaneça dentro do intervalo válido quando filtros ou tamanho da página mudam
   useEffect(() => {
     const newTotal = Math.max(1, Math.ceil(eventosFiltrados.length / eventsPerPage));
     if (currentPage > newTotal) {
@@ -490,11 +490,11 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventosFiltrados.length, eventsPerPage]);
 
-  // Preencher a grade com placeholders até completar eventsPerPage.
-  // Desired behavior: for students/guardians show the same card-grid as students (colored cards for events; if no events, show clean placeholders).
+  // Preencher a grade com espaços reservados até completar eventsPerPage.
+  // Comportamento desejado: para estudantes/responsáveis mostrar a mesma grade de cartões (cartões coloridos para eventos; se não houver eventos, mostrar espaços reservados limpos).
   const shouldShowPlaceholders = () => {
-    // We show placeholders to keep a consistent grid when there are no events.
-    // Admin users see placeholders for layout as well; non-admins also see placeholders when no events exist.
+  // Mostrar espaços reservados para manter uma grade consistente quando não há eventos.
+  // Usuários admin veem espaços reservados para o layout também; não-admins também veem quando não há eventos.
     return true;
   };
 
@@ -554,7 +554,7 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
                 <option value="avisos">Avisos</option>
                 <option value="outros">Outros</option>
                 {eventTypes.map((t, i) => (
-                  // Only add custom types if they don't collide with the known categories
+                  // Adicionar tipos personalizados apenas se não entrarem em conflito com as categorias conhecidas
                   (['eventos','reunioes','avisos','todos'].includes(t.toLowerCase()) ? null : (
                     <option key={`custom-type-${i}`} value={t}>{t}</option>
                   ))
@@ -621,7 +621,7 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
                       <Evento key={`evento-${index}`} evento={evento} isAdmin={isAdmin} openModal={openModal} />
                     )));
                 }
-                // Preencher a grade com placeholders brancos para manter layout
+                // Preencher a grade com espaços reservados para manter o layout
                 let totalBlocos = eventsPerPage;
                 let usados = blocos.length;
                 let placeholders = Math.max(0, totalBlocos - usados);

@@ -5,9 +5,9 @@ import Button from './ui/Button';
 
 const UserProfile = () => {
   const [loading, setLoading] = useState(true);
-  // email and phone are editable by default; name fields are read-only
+  // email e telefone são editáveis por padrão; campos de nome são somente leitura
   const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState('info'); // 'info' | 'warning' | 'danger'
+  const [messageType, setMessageType] = useState('info'); // 'info' | 'warning' | 'danger' (tipo de alerta)
   const [profile, setProfile] = useState({ first_name: '', last_name: '', email: '', phone: '' });
   const [pwd, setPwd] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [activeTab, setActiveTab] = useState('info'); // 'info' | 'password'
@@ -47,7 +47,7 @@ const UserProfile = () => {
         loadFromLocal();
       }
     } catch (err) {
-      // if backend returns 404, fallback to localStorage
+      // se o backend retornar 404, usar fallback para localStorage
       const status = err && err.response ? err.response.status : null;
       console.warn('Erro ao carregar perfil (endpoint /user/profile). Status:', status);
       if (status === 404) {
@@ -65,7 +65,7 @@ const UserProfile = () => {
 
   useEffect(() => { fetchProfile(); }, []);
 
-  // update sliding underline position when activeTab changes or on resize
+  // atualizar posição do sublinhado deslizante quando activeTab mudar ou ao redimensionar
   useEffect(() => {
     const update = () => {
       try {
@@ -75,19 +75,20 @@ const UserProfile = () => {
         if (!activeEl) return setUnderline(u => ({ ...u, visible: false }));
         const navRect = nav.getBoundingClientRect();
         const activeRect = activeEl.getBoundingClientRect();
-        // account for horizontal scroll inside nav (mobile overflow-x)
+        // compensar rolagem horizontal dentro do nav (overflow-x em mobile)
         const left = activeRect.left - navRect.left + (nav.scrollLeft || 0);
         const width = activeRect.width;
         setUnderline({ left, width, visible: true });
       } catch (e) {
-        // ignore measurement errors
+        // ignorar erros de medição
         setUnderline(u => ({ ...u, visible: false }));
       }
     };
-    // run on next tick to ensure layout is ready
+    // executar no próximo tick para garantir que o layout esteja pronto
     setTimeout(update, 0);
     window.addEventListener('resize', update);
     // update on scroll so underline follows when user scrolls tabs horizontally
+    // atualizar no scroll para que o sublinhado acompanhe quando o usuário rolar as abas horizontalmente
     const navEl = navRef.current;
     if (navEl) navEl.addEventListener('scroll', update, { passive: true });
     return () => {
@@ -96,7 +97,7 @@ const UserProfile = () => {
     };
   }, [activeTab]);
 
-  // When switching tabs, clear any existing messages so errors/warnings don't persist across tabs
+  // Ao trocar de aba, limpar mensagens existentes para que erros/avisos não persistam entre abas
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     setMessage('');
@@ -109,27 +110,27 @@ const UserProfile = () => {
   const resp = await api.put('/users/profile', profile);
       setMessage('Perfil atualizado.');
       setMessageType('success');
-      if (resp && resp.data) {
+        if (resp && resp.data) {
         setProfile(resp.data);
-        // persist in localStorage for sync with other UI
+        // persistir em localStorage para sincronizar com outras partes da UI
         try {
           localStorage.setItem('user_first_name', resp.data.first_name || '');
           localStorage.setItem('user_last_name', resp.data.last_name || '');
           localStorage.setItem('user_email', resp.data.email || '');
           localStorage.setItem('user_phone', resp.data.phone || '');
-          // notify other parts of the app (TopNav, Dashboard)
+          // notificar outras partes do app (TopNav, Dashboard)
           window.dispatchEvent(new CustomEvent('profileUpdated', { detail: resp.data }));
-        } catch (e) { /* ignore storage errors */ }
+        } catch (e) { /* ignorar erros de armazenamento */ }
       }
     } catch (err) {
       const status = err && err.response ? err.response.status : null;
       console.error('Erro ao salvar perfil:', err);
-      if (status === 404) {
-        // backend not available; save to localStorage as fallback
-        Object.keys(localKeys).forEach(k => localStorage.setItem(localKeys[k], profile[k] || ''));
-        setMessage('Servidor indisponível. Perfil salvo localmente.');
-        setMessageType('warning');
-  // keep UI editable; data saved to localStorage as fallback
+  if (status === 404) {
+    // backend indisponível; salvar em localStorage como fallback
+    Object.keys(localKeys).forEach(k => localStorage.setItem(localKeys[k], profile[k] || ''));
+    setMessage('Servidor indisponível. Perfil salvo localmente.');
+    setMessageType('warning');
+  // manter UI editável; dados salvos em localStorage como fallback
       } else {
         setMessage('Erro ao salvar perfil.');
         setMessageType('danger');
@@ -163,7 +164,7 @@ const UserProfile = () => {
         <div className="user-tabs nav nav-tabs" ref={navRef}>
           <button className={`nav-link ${activeTab === 'info' ? 'active' : ''}`} onClick={() => handleTabChange('info')}>Informações do perfil</button>
           <button className={`nav-link ${activeTab === 'password' ? 'active' : ''}`} onClick={() => handleTabChange('password')}>Alterar senha</button>
-          {/* sliding underline (positioned via inline style) */}
+          {/* sublinhado deslizante (posicionado via estilo inline) */}
           <div
             className="user-tabs-underline"
             style={{

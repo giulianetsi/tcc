@@ -12,7 +12,7 @@ const GroupMembers = () => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
-  // Track pending changes locally
+  // Rastrear alterações pendentes localmente
   const [toAdd, setToAdd] = useState(new Set());
   const [toRemove, setToRemove] = useState(new Set());
   const [membersQuery, setMembersQuery] = useState('');
@@ -25,18 +25,18 @@ const GroupMembers = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      // try to fetch group basic info if available; fallback to listing groups and finding by id
+  // tentar obter informações básicas do grupo se disponível; como fallback, listar grupos e buscar pelo id
       try {
         const g = await api.get(`/groups/${groupId}`);
         setGroup(g.data);
       } catch (e) {
-        // fallback: if backend doesn't expose GET /groups/:id, try GET /groups and find the group
+  // fallback: se o backend não expõe GET /groups/:id, tentar GET /groups e localizar o grupo
         try {
           const all = await api.get('/groups');
           const found = (all.data || []).find(gr => String(gr.id) === String(groupId));
           if (found) setGroup(found);
         } catch (err2) {
-          // still ignore; group will remain null and UI shows fallback title
+          // ainda ignorar; o grupo permanecerá null e a UI exibirá um título padrão
         }
       }
 
@@ -46,7 +46,7 @@ const GroupMembers = () => {
       ]);
       setMembers(mResp.data || []);
       setAvailable(aResp.data || []);
-      // reset pending
+  // resetar listas pendentes
       setToAdd(new Set());
       setToRemove(new Set());
     } catch (err) {
@@ -59,7 +59,7 @@ const GroupMembers = () => {
 
   const markAdd = (userId) => {
     setToAdd(prev => new Set(prev).add(userId));
-    // optimistic UI: remove from available list
+  // UI otimista: remover da lista de disponíveis
     setAvailable(prev => prev.filter(u => u.id !== userId));
   };
 
@@ -69,7 +69,7 @@ const GroupMembers = () => {
       s.delete(userId);
       return s;
     });
-    // restore to available by re-fetch if needed; simple approach: no-op
+  // restaurar para disponíveis por re-fetch se necessário; abordagem simples: no-op
     fetchData();
   };
 
@@ -89,7 +89,7 @@ const GroupMembers = () => {
     try {
       setSaving(true);
       setMessage('');
-      // Apply removals first
+  // Aplicar remoções primeiro
       for (const userId of Array.from(toRemove)) {
         try {
           await api.delete(`/groups/${groupId}/members/${userId}`);
@@ -97,7 +97,7 @@ const GroupMembers = () => {
           console.warn('Erro ao remover membro', userId, e);
         }
       }
-      // Apply additions
+  // Aplicar adições
       for (const userId of Array.from(toAdd)) {
         try {
           await api.post('/groups/assign-user', { groupId: Number(groupId), userId: Number(userId) });
@@ -106,9 +106,9 @@ const GroupMembers = () => {
         }
       }
 
-      setMessage('✅ Alterações salvas com sucesso');
-      // reload data
-      await fetchData();
+  setMessage('✅ Alterações salvas com sucesso');
+  // recarregar dados
+  await fetchData();
     } catch (err) {
       console.error('Erro ao salvar alterações de membros:', err);
       setMessage('Erro ao salvar alterações');

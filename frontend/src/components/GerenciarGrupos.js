@@ -54,9 +54,9 @@ const GerenciarGrupos = () => {
 			return Array.isArray(response.data) ? response.data : [];
 		} catch (error) {
 			console.error('Erro ao carregar grupos:', error);
-			// If authenticated fetch fails (401/403), try public endpoint as fallback
+			// Se a requisição autenticada falhar (401/403), tentar o endpoint público como fallback
 			if (error.response?.status === 401) {
-				// try public endpoint
+				// tentar endpoint público
 				try {
 					const pub = await api.get('/groups/public');
 					setGrupos(pub.data);
@@ -67,7 +67,7 @@ const GerenciarGrupos = () => {
 					return null;
 				}
 			} else if (error.response?.status === 403) {
-				// try public endpoint too
+				// tentar endpoint público também
 				try {
 					const pub = await api.get('/groups/public');
 					setGrupos(pub.data);
@@ -100,10 +100,10 @@ const GerenciarGrupos = () => {
 				const resp = await api.post('/groups/create', novoGrupo);
 				console.log('Resposta create group:', resp.status, resp.data);
 
-				// If backend returned the created group, insert it optimistically so UI shows it immediately
+				// Se o backend retornou o grupo criado, inseri-lo de forma otimista para que a UI mostre imediatamente
 				const created = resp.data && resp.data.group ? resp.data.group : null;
 				if (created) {
-					// optimistic update
+					// atualização otimista
 					setGrupos(prev => [created, ...prev]);
 					// close modal immediately for better UX
 					setModalIsOpen(false);
@@ -229,10 +229,10 @@ const GerenciarGrupos = () => {
 
 	return (
 		<div className="container mt-4">
-			{/* Header */}
+			{/* Cabeçalho */}
 	            <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap">
 				<div className="d-flex align-items-center">
-					{/* Voltar button */}
+					{/* Botão Voltar */}
 					<Button as="button" variant="secondary" size="md" className="me-3" onClick={() => navigate(-1)}>Voltar</Button>
 					<div>
 						<h2 className="mb-1">Gerenciar Grupos</h2>

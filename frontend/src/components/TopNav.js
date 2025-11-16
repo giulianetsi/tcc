@@ -13,7 +13,7 @@ const TopNav = () => {
 
   const isActive = (path) => {
     if (!path) return false;
-    // match root exactly or startsWith for nested paths
+  // corresponder à raiz exatamente ou verificar startsWith para caminhos aninhados
     if (path === '/') return location.pathname === '/';
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
@@ -58,7 +58,7 @@ const TopNav = () => {
       <IfsulLogoWhite className="navbar-logo" role="img" aria-label="IFSUL" />
 
       <div className={`navbar-links desktop`}>
-        {/* desktop links without separator */}
+  {/* links para desktop sem separador */}
         {/* 'Início' */}
   <button onClick={() => navigate('/')} className={isActive('/') ? 'topnav-btn active' : 'topnav-btn'} style={{ background: 'none', border: 'none', color: 'white', textDecoration: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', margin: '0 10px' }}>Início</button>
   <button onClick={() => navigate('/profile')} className={isActive('/profile') ? 'topnav-btn active' : 'topnav-btn'} style={{ background: 'none', border: 'none', color: 'white', textDecoration: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', margin: '0 10px' }}>Perfil</button>
@@ -104,7 +104,7 @@ const TopNav = () => {
         <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: 'white', textDecoration: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', margin: '0 10px' }}>Sair</button>
       </div>
 
-  {/* (username removed from topbar per request) */}
+  {/* (nome de usuário removido da barra superior por solicitação) */}
 
       <div className={`drawer ${menuOpen ? 'open' : ''}`} role="dialog" aria-hidden={!menuOpen} aria-label="Menu">
         <div className="drawer-header">
@@ -114,7 +114,7 @@ const TopNav = () => {
           <button className="drawer-close" onClick={toggleMenu} aria-label="Fechar menu">×</button>
         </div>
         <div className="drawer-content">
-          {/* Drawer items (no separator) */}
+          {/* Itens do drawer (sem separador) */}
           <button className={isActive('/') ? 'nav-item active' : 'nav-item'} onClick={() => { navigate('/'); setMenuOpen(false); }}>
             <FaHome className="nav-icon" />
             <span>Início</span>

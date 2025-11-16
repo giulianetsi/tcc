@@ -4,9 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import logo from '../assets/ifsul-logo.svg';
 
-// Read the public VAPID key from the build-time environment variable so builds
-// for production can inject the real key. Keep the existing key as a
-// development fallback only (will be overridden in production builds).
+// Ler a chave pública VAPID a partir da variável de ambiente em tempo de build
+// para que os builds de produção possam injetar a chave real. Manter a chave
+// existente apenas como fallback de desenvolvimento (será sobrescrita em produção).
 const publicVapidKey = process.env.REACT_APP_PUBLIC_VAPID_KEY || 'BIDByJJTac6ThaHCPJVS1pszWZVVqvCyCfbL68BEogxfT9MO8Swu5ouZtambPZDgo-cEOMejCAvoViWn6zpX8ig';
 
 const Login = () => {
@@ -215,7 +215,7 @@ const Login = () => {
 
   const urlBase64ToUint8Array = (base64String) => {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
-  // Hyphen does not need escaping outside character classes — remove unnecessary escape
+  // O hífen não precisa de escape fora de classes de caracteres — remover escape desnecessário
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
     const rawData = window.atob(base64);
     const outputArray = new Uint8Array(rawData.length);

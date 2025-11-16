@@ -11,7 +11,7 @@ const ManagePermissions = () => {
   const [originalRows, setOriginalRows] = useState([]);
   const navigate = useNavigate();
 
-  // Map DB user_type values to readable Portuguese labels
+  // Mapear os valores de user_type do banco de dados para rótulos legíveis em português
   const USER_TYPE_LABELS = {
     // Portuguese
     aluno: 'Aluno',
@@ -34,8 +34,8 @@ const ManagePermissions = () => {
       const resp = await api.get('/admin/permissions');
       const data = resp.data || [];
       setRows(data);
-      // keep an immutable snapshot to detect changes
-      setOriginalRows(JSON.parse(JSON.stringify(data)));
+  // manter um snapshot imutável para detectar alterações
+  setOriginalRows(JSON.parse(JSON.stringify(data)));
     } catch (err) {
       console.error('Erro ao buscar permissões:', err);
       setMessage('Erro ao buscar permissões');
@@ -48,7 +48,7 @@ const ManagePermissions = () => {
     fetchPermissions();
   }, []);
 
-  // Helpers
+  // Funções auxiliares
   const capitalize = (s) => typeof s === 'string' && s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 
   const getPermissionSummary = (r) => {
@@ -85,7 +85,7 @@ const ManagePermissions = () => {
 
     try {
       setSaving(row.user_type_id);
-      // preserve per-user notification setting by reading original snapshot
+    // preservar a configuração de notificação por usuário lendo o snapshot original
       const orig = originalRows.find(o => o.user_type_id === row.user_type_id) || {};
       const canReceiveNotifications = orig.can_receive_notifications || 0;
 
@@ -111,7 +111,7 @@ const ManagePermissions = () => {
     setRows(prev => prev.map(r => r.user_type_id === user_type_id ? JSON.parse(JSON.stringify(originalRows.find(o => o.user_type_id === user_type_id) || r)) : r));
   };
 
-  // Audit history removed: this UI no longer calls /audit endpoints.
+  // Histórico de auditoria removido: esta interface não chama mais endpoints /audit.
 
   return (
     <div className="container mt-4">
@@ -126,7 +126,7 @@ const ManagePermissions = () => {
         <div>Carregando...</div>
       ) : (
         <>
-          {/* Responsive permission list: visually clearer rows/cards for all screen sizes */}
+          {/* Lista de permissões responsiva: linhas/cartões visualmente mais claros para todos os tamanhos de tela */}
           <div className="perm-list">
             {rows.map((r, idx) => {
               const changed = isRowChanged(r);

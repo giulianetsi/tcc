@@ -33,7 +33,7 @@ self.addEventListener('activate', function(event) {
   );
 });
 
-// Helper: network-first for API requests (cache fallback)
+// Helper: estratégia network-first para requisições de API (fallback para cache)
 async function networkFirst(request) {
   const cache = await caches.open(API_CACHE);
   try {
@@ -54,10 +54,10 @@ self.addEventListener('fetch', function(event) {
   const req = event.request;
   const url = new URL(req.url);
 
-  // Only handle GET requests
+  // Lidar apenas com requisições GET
   if (req.method !== 'GET') return;
 
-  // API: events - network first, cache fallback
+  // API: endpoints de eventos - estratégia network-first, com fallback para cache
   if (url.pathname.startsWith('/api/events') || url.pathname.includes('/api/events')) {
     event.respondWith(
       networkFirst(req).catch(() => caches.match('/offline.html'))
@@ -65,7 +65,7 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  // Navigation requests (HTML pages) - try network, fallback to cache or offline.html
+  // Requisições de navegação (páginas HTML) - tentar rede, fallback para cache ou offline.html
   if (req.mode === 'navigate') {
     event.respondWith(
       (async () => {
@@ -82,7 +82,7 @@ self.addEventListener('fetch', function(event) {
     return;
   }
 
-  // For other requests (static assets) use cache-first
+  // Para outras requisições (assets estáticos) usar cache-first
   event.respondWith(
     caches.match(req).then(cached => {
       if (cached) return cached;
@@ -90,7 +90,7 @@ self.addEventListener('fetch', function(event) {
         // Cache the fetched asset for future offline use (avoid caching cross-origin opaque responses)
         try {
           const contentType = res.headers.get('content-type') || '';
-          // Only cache JS/CSS/HTML/JSON/images/fonts
+          // Cachear apenas arquivos JS/CSS/HTML/JSON/imagens/fonts
           if (!res || res.type === 'opaque') return res;
           if (contentType.includes('javascript') || contentType.includes('css') || contentType.includes('text/html') || contentType.includes('application/json') || contentType.includes('image') || contentType.includes('font')) {
             const cache = await caches.open(CACHE_NAME);
@@ -105,7 +105,7 @@ self.addEventListener('fetch', function(event) {
   );
 });
 
-// Push notifications: ignore health-check payloads and show others
+// Notificações push: ignorar payloads de health-check e exibir as demais
 self.addEventListener('push', function(event) {
   console.log('Push notification recebida:', event);
   event.waitUntil((async () => {
@@ -116,7 +116,7 @@ self.addEventListener('push', function(event) {
       } catch (e) {
         try {
           const text = await event.data.text();
-          // If backend sent a raw 'health-check' string, ignore it
+          // Se o backend enviou a string 'health-check' bruta, ignorar
           if (text === 'health-check') return;
           data.body = text;
         } catch (err) {
@@ -126,7 +126,7 @@ self.addEventListener('push', function(event) {
     }
 
     if (data && (data.type === 'health-check' || data.title === 'health-check' || data.body === 'health-check')) {
-      // silently ignore
+      // ignorar silenciosamente
       return;
     }
 

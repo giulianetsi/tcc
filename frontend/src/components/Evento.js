@@ -2,22 +2,21 @@ import { FaEdit, FaTrashAlt } from "react-icons/fa";
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 
-// Core color palette requested by product
+// Paleta de cores principal usada pelo produto
 const COLORS = {
-    event: '#FFCC33',      // eventos
-    reuniao: '#0FB9B1',    // reuniões
-    aviso: '#CC3333',      // avisos
-    palestra: '#F4A171',   // palestra (nova)
-    // new mappings requested
-    workshop: '#3884C7',   // workshop
-    cerimonia: '#C04D00',  // cerimônia (updated)
-    treinamento: '#8E7DBE',// treinamento
-    outros: '#6C737E',     // outros
+    event: '#FFCC33',      // Eventos
+    reuniao: '#0FB9B1',    // Reuniões
+    aviso: '#CC3333',      // Avisos
+    palestra: '#F4A171',   // Palestra (novo)
+    workshop: '#3884C7',   // Workshop
+    cerimonia: '#C04D00',  // Cerimônia (atualizado)
+    treinamento: '#8E7DBE',// Treinamento
+    outros: '#6C737E',     // Outros
     default: '#F6F6F6'
 };
 
-// Some older data uses Tipo1/Tipo2/Tipo3; keep compatibility while
-// also recognizing localized words like 'evento', 'reunião', 'aviso'.
+// Dados antigos podem usar Tipo1/Tipo2/Tipo3; manter compatibilidade enquanto
+// também reconhecemos palavras localizadas como 'evento', 'reunião', 'aviso'.
 const exactMap = {
     'Tipo1': COLORS.event,
     'Tipo2': COLORS.reuniao,
@@ -26,7 +25,7 @@ const exactMap = {
 
 function getColorForType(tipo) {
     if (!tipo) return COLORS.default;
-    // exact match first
+    // Preferir correspondência exata primeiro
     if (exactMap[tipo]) return exactMap[tipo];
 
     const t = String(tipo).toLowerCase();
@@ -44,7 +43,7 @@ function getColorForType(tipo) {
 
 export function Evento({ evento, isAdmin, openModal }) {
     const navigate = useNavigate();
-    // Não renderizar placeholders - retorna null (completamente invisível)
+    // Não renderizar cartões de espaço reservado (placeholders) — retornar null para não ocupar espaço
     if (evento.titulo === 'Placeholder') {
         return null;
     }
@@ -52,11 +51,11 @@ export function Evento({ evento, isAdmin, openModal }) {
     const isCreator = currentUserId && evento.criado_por_id && Number(currentUserId) === Number(evento.criado_por_id);
 
     const formatDateTime = () => {
-        // Respect explicit mostrar_data flag: if false, don't show any date/time
+        // Respeitar flag explícita mostrar_data: se false, não exibir data/hora
         if (!evento) return '';
         if (typeof evento.mostrar_data !== 'undefined' && evento.mostrar_data === false) return '';
 
-        // If the event uses a period (range), prefer that
+        // Se o evento usar período (range), preferir exibir o período
         const ps = evento.data_period_start || evento.period_start || evento.data_periodo_inicio || '';
         const pe = evento.data_period_end || evento.period_end || evento.data_periodo_fim || '';
         if (ps || pe) {
@@ -64,7 +63,7 @@ export function Evento({ evento, isAdmin, openModal }) {
             return ps || pe || '';
         }
 
-        // Fallback to single-date + optional time
+        // Caso contrário, fallback para data única + hora opcional
         const d = evento.data ? String(evento.data).trim() : '';
         const h = evento.hora ? String(evento.hora).trim() : '';
         if (d && h) return `${d} — ${h}`;
@@ -80,11 +79,11 @@ export function Evento({ evento, isAdmin, openModal }) {
         >
             <div className="event-content">
                 <h5 className="card-title">{evento.titulo}</h5>
-                {/* description intentionally omitted to keep cards compact */}
+                {/* descrição intencionalmente omitida para manter os cartões compactos */}
                 {formatDateTime() ? <p className="event-datetime">{formatDateTime()}</p> : null}
                 {evento.local ? <p className="event-local">{evento.local}</p> : null}
             </div>
-            {/* Ícones só para criador OU admin */}
+            {/* Ícones exibidos apenas para o criador OU para admin que é o criador */}
             {(isCreator || (isAdmin && isCreator)) ? (
                 <div className="icon-buttons">
                     <button
@@ -106,16 +105,16 @@ export function Evento({ evento, isAdmin, openModal }) {
                                 await api.delete(`/events/${evento.id}`);
                                 window.dispatchEvent(new CustomEvent('evento-deleted', { detail: { id: evento.id } }));
                             } catch (err) {
-                                                    console.error('Erro ao deletar evento', err);
-                                                    alert('Erro ao deletar evento');
-                                                }
-                                            }}
-                                            title="Apagar evento"
-                                        >
-                                                <FaTrashAlt />
-                                        </button>
-                                </div>
-                        ) : null}
+                                console.error('Erro ao deletar evento', err);
+                                alert('Erro ao deletar evento');
+                            }
+                        }}
+                        title="Apagar evento"
+                    >
+                        <FaTrashAlt />
+                    </button>
+                </div>
+            ) : null}
         </div>
     );
 }

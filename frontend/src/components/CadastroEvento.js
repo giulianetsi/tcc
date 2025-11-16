@@ -17,9 +17,9 @@ const CadastroEvento = () => {
   });
   const [publicoTodos, setPublicoTodos] = useState(true);
   const [dataHorarioEvento, setDataHorarioEvento] = useState('');
-  const [dateMode, setDateMode] = useState('single'); // 'single' or 'period'
+  const [dateMode, setDateMode] = useState('single'); // 'single' ou 'period'
   const [singleDate, setSingleDate] = useState(''); // YYYY-MM-DD
-  const [singleTime, setSingleTime] = useState(''); // HH:MM (optional)
+  const [singleTime, setSingleTime] = useState(''); // HH:MM (opcional)
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
   const [mostrarData, setMostrarData] = useState(true);
@@ -42,15 +42,15 @@ const CadastroEvento = () => {
   const location = useLocation();
   const editingEvento = location.state && location.state.evento;
 
-  // If editing, prefill the form
+  // Se estiver editando, preencher o formulário com os dados do evento
   useEffect(() => {
     if (editingEvento) {
       setTitulo(editingEvento.titulo || '');
       setDescricao(editingEvento.texto || '');
       setTipo(editingEvento.tipo || '');
-      // Prefer raw ISO datetime if backend provided it -> prefill singleDate/singleTime
+  // Preferir datetime ISO bruto se fornecido pelo backend -> preencher singleDate/singleTime
       if (editingEvento.event_datetime_raw) {
-        // try to split ISO into date and time for inputs
+  // tentar separar ISO em data e hora para os inputs
         const raw = editingEvento.event_datetime_raw;
         const m = raw.match(/^(\d{4}-\d{2}-\d{2})(?:T?(\d{2}:\d{2}))?/);
         if (m) {
@@ -61,7 +61,7 @@ const CadastroEvento = () => {
           setSingleDate(editingEvento.data || '');
         }
       } else if (editingEvento.data) {
-        // fallback: try to parse DD/MM/YYYY into YYYY-MM-DD and optional hora
+          // fallback: tentar parsear DD/MM/YYYY para YYYY-MM-DD e hora opcional
         const matchDateOnly = editingEvento.data.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
         const matchWithTime = editingEvento.data.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2})$/);
         if (matchWithTime) {
@@ -77,37 +77,37 @@ const CadastroEvento = () => {
           setSingleDate(editingEvento.data || '');
         }
       }
-      // If backend provides period fields, prefill period mode
+  // Se o backend fornecer campos de período, preencher o modo 'period'
       if (editingEvento.data_period_start || editingEvento.data_period_end) {
         setPeriodStart(editingEvento.data_period_start || '');
         setPeriodEnd(editingEvento.data_period_end || '');
         setDateMode('period');
       }
-      // mostrar_data flag
+  // sinalizador mostrar_data
       if (typeof editingEvento.mostrar_data !== 'undefined') {
         setMostrarData(Boolean(editingEvento.mostrar_data));
       }
       if (typeof editingEvento.mostrar_apenas_na_data !== 'undefined') {
         setMostrarApenasNaData(Boolean(editingEvento.mostrar_apenas_na_data));
       }
-      // prefill notification scheduling fields if editing
+  // preencher campos de agendamento de notificação se estiver editando
       if (typeof editingEvento.sendNotification !== 'undefined') {
         setSendNotificationChecked(Boolean(editingEvento.sendNotification));
       }
       if (editingEvento.event_datetime_raw) {
-        // Prefill scheduledNotificationDatetime with event datetime if available
+  // Preencher scheduledNotificationDatetime com a datetime do evento, se disponível
         const raw = editingEvento.event_datetime_raw;
         const isoWithTime = raw.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
         if (isoWithTime) {
           setScheduledNotificationDatetime(isoWithTime[0]);
         }
       } else if (editingEvento.data && editingEvento.hora) {
-        // combine date and time if provided separately
+  // combinar data e hora se fornecidos separadamente
         const iso = `${editingEvento.data.split('/').reverse().join('-')}T${editingEvento.hora}`;
         setScheduledNotificationDatetime(iso);
       }
       setLocalEvento(editingEvento.local || '');
-      // If backend provides target_user_types, populate publicoAlvo
+  // Se o backend fornecer target_user_types, preencher publicoAlvo
       if (editingEvento.target_user_types && Array.isArray(editingEvento.target_user_types)) {
         const map = { student: false, teacher: false, guardian: false, admin: false };
         editingEvento.target_user_types.forEach(t => {
@@ -138,7 +138,7 @@ const CadastroEvento = () => {
     const carregarGrupos = async () => {
       try {
         const res = await api.get('/groups');
-        // backend may return { data: [...] } or an array directly
+        // o backend pode retornar { data: [...] } ou um array diretamente
         setGrupos(res.data || []);
       } catch (err) {
         console.error('Erro ao carregar grupos:', err);
@@ -170,7 +170,7 @@ const CadastroEvento = () => {
   const handlePublicoChange = (tipo) => {
     setPublicoAlvo(prev => {
       const next = { ...prev, [tipo]: !prev[tipo] };
-      // If any individual type is deselected, unset 'Todos'
+      // Se algum tipo individual for desmarcado, atualizar 'Todos'
       const allSelected = Object.values(next).every(Boolean);
       setPublicoTodos(allSelected);
       return next;
@@ -200,17 +200,17 @@ const CadastroEvento = () => {
     setLoading(true);
     setMessage('');
 
-    // Pega valor do checkbox de notificação
+      // Pegar valor do checkbox de notificação
   const sendNotification = sendNotificationChecked;
 
-    // Validações adicionais
+  // Validações adicionais
     if (!titulo.trim() || !descricao.trim() || !tipo) {
       setMessage('Por favor, preencha todos os campos obrigatórios.');
       setLoading(false);
       return;
     }
 
-    // Date validation depending on mode
+  // Validação de data dependendo do modo
     let payloadDate = {};
     if (dateMode === 'single') {
       if (!singleDate) {
@@ -218,9 +218,9 @@ const CadastroEvento = () => {
         setLoading(false);
         return;
       }
-      // Build ISO-like string if time provided
-      const dtStr = singleTime ? `${singleDate}T${singleTime}` : `${singleDate}`;
-      // Optional: check not in past (if time provided use time, otherwise compare dates)
+  // Construir string parecida com ISO se o horário for fornecido
+  const dtStr = singleTime ? `${singleDate}T${singleTime}` : `${singleDate}`;
+  // Opcional: verificar se não está no passado (se hora fornecida use hora, caso contrário compare datas)
       const now = new Date();
       const compare = singleTime ? new Date(`${singleDate}T${singleTime}`) : new Date(singleDate + 'T00:00:00');
       if (!isNaN(compare.getTime()) && compare < now) {
@@ -230,7 +230,7 @@ const CadastroEvento = () => {
       }
       payloadDate.data_horario_evento = dtStr;
     } else {
-      // period
+  // período
       if (!periodStart || !periodEnd) {
         setMessage('Por favor, preencha o período (data inicial e final).');
         setLoading(false);
@@ -247,7 +247,7 @@ const CadastroEvento = () => {
       payloadDate.data_period_end = periodEnd;
     }
 
-    // Validar se pelo menos um tipo de usuário foi selecionado
+  // Validar se pelo menos um tipo de usuário foi selecionado
     const algumPublicoSelecionado = Object.values(publicoAlvo).some(selected => selected);
     if (!algumPublicoSelecionado) {
       setMessage('Por favor, selecione pelo menos um tipo de usuário como público alvo.');
@@ -256,15 +256,15 @@ const CadastroEvento = () => {
     }
 
 
-    // Preparar tipos de usuário selecionados
+  // Preparar lista de tipos de usuário selecionados
     const tiposUsuarioSelecionados = Object.keys(publicoAlvo).filter(tipo => publicoAlvo[tipo]);
     
-    // Determinar se é público (todos podem ver, independente de grupos)
+  // Determinar se é público (todos podem ver, independente de grupos)
     const todosOsTipos = ['student', 'teacher', 'guardian', 'admin'];
     const ePublico = tiposUsuarioSelecionados.length === todosOsTipos.length && 
                      tiposUsuarioSelecionados.every(tipo => todosOsTipos.includes(tipo));
 
-    // Validação: se usuário escolheu agendar notificação, não permitir data passada
+  // Validação: se o usuário escolheu agendar notificação, não permitir data no passado
     if (sendNotification && sendNotificationMode === 'scheduled') {
       if (!scheduledNotificationDatetime) {
         setMessage('Por favor, selecione data/hora para a notificação agendada.');
@@ -288,7 +288,7 @@ const CadastroEvento = () => {
       }
     }
 
-    console.log('Dados a serem enviados:', {
+  console.log('Dados a serem enviados:', {
       titulo: titulo.trim(),
       descricao: descricao.trim(),
       tipo,
@@ -305,7 +305,7 @@ const CadastroEvento = () => {
 
     try {
   if (editingEvento && editingEvento.id) {
-        // Confirm before updating
+        // Confirmar antes de atualizar
         if (!window.confirm('Deseja realmente atualizar este evento com os novos dados?')) {
           setLoading(false);
           return;
@@ -326,9 +326,9 @@ const CadastroEvento = () => {
           sendNotificationMode,
           scheduledNotificationDatetime: sendNotificationMode === 'scheduled' ? scheduledNotificationDatetime : undefined
         });
-        setMessage('✅ Evento atualizado com sucesso!');
-        // notify dashboard to refresh
-        window.dispatchEvent(new CustomEvent('evento-updated', { detail: { id: editingEvento.id } }));
+  setMessage('✅ Evento atualizado com sucesso!');
+  // notificar o painel para atualizar
+  window.dispatchEvent(new CustomEvent('evento-updated', { detail: { id: editingEvento.id } }));
         setMessageType('success');
       } else {
         const response = await api.post('/events/add-evento', {
@@ -348,7 +348,7 @@ const CadastroEvento = () => {
           scheduledNotificationDatetime: sendNotificationMode === 'scheduled' ? scheduledNotificationDatetime : undefined
         });
   setMessage('✅ Evento adicionado com sucesso!');
-  window.dispatchEvent(new CustomEvent('evento-created', { detail: { /* optional payload */ } }));
+  window.dispatchEvent(new CustomEvent('evento-created', { detail: { /* payload opcional */ } }));
         setMessageType('success');
 
         // Limpar o formulário após o sucesso

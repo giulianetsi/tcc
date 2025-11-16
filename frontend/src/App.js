@@ -5,7 +5,7 @@ import Login from './components/Login';
 import Cadastro from './components/Cadastro';
 import CadastroEvento from './components/CadastroEvento';
 import Dashboard from './components/Dashboard';
-import GerenciarGrupos from './components/GerenciarGrupos'; // Importar componente de grupos
+import GerenciarGrupos from './components/GerenciarGrupos'; 
 import GroupMembers from './components/GroupMembers';
 import ManagePermissions from './components/ManagePermissions';
 import UserProfile from './components/UserProfile';
@@ -27,11 +27,11 @@ const getUserData = () => {
   let username = 'Usuário';
   let isAdmin = false;
   
-  if (permissions) {
+      if (permissions) {
     try {
       const perms = JSON.parse(permissions);
-      // Consider user an admin for UI purposes if they have broad management permissions.
-      // Prefer explicit canCreateUser or canViewAllEvents to avoid relying on numeric IDs.
+      // Considerar o usuário como administrador na UI se tiver permissões amplas de gestão.
+      // Preferir campos explícitos (canCreateUser / canViewAllEvents) ao invés de depender somente de IDs numéricos.
       isAdmin = Boolean(perms.canCreateUser || perms.can_create_user || perms.canViewAllEvents || perms.can_view_all_events);
     } catch (e) {
       console.log('Erro ao parsear permissões:', e);
@@ -42,8 +42,8 @@ const getUserData = () => {
   if (firstName) {
     username = `${firstName}${lastName ? ` ${lastName}` : ''}`;
   } else {
-    // Fallback para tipo de usuário se nome não disponível
-    // Prefer user_type_id numeric mapping if available
+  // Fallback para tipo de usuário se nome não disponível
+  // Preferir mapeamento numérico de user_type_id se disponível
     if (userTypeId) {
       switch(Number(userTypeId)) {
         case 1:
@@ -61,7 +61,7 @@ const getUserData = () => {
         default:
           username = 'Usuário';
       }
-      // Numeric fallback: if ever mapped, treat 1 as admin
+      // Fallback numérico: se mapeado, tratar 1 como administrador
       if (Number(userTypeId) === 1) isAdmin = true;
     } else {
       switch(userType) {
@@ -80,7 +80,7 @@ const getUserData = () => {
         default:
           username = 'Usuário';
       }
-      // If textual user_type indicates admin, set isAdmin as well
+      // Se user_type textual indicar 'admin', também marcar isAdmin
       if (userType === 'admin') isAdmin = true;
     }
   }

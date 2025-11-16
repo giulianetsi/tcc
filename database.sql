@@ -225,12 +225,6 @@ SHOW WARNINGS;
 CREATE INDEX `user_type_id` ON `pwa`.`permissions` (`user_type_id` ASC) VISIBLE;
 
 SHOW WARNINGS;
--- Note: previous model included a separate table `push_subscriptions`.
--- The project now consolidates push subscriptions into the `subscriptions` table.
--- The legacy `push_subscriptions` creation has been removed to avoid creating
--- duplicate storage during deploy. If you have existing data in an old
--- database, run the consolidation migration `backend/migrations/003-consolidate-subscriptions.sql`.
-
 -- -----------------------------------------------------
 -- Table `pwa`.`students`
 -- -----------------------------------------------------
@@ -356,15 +350,6 @@ FROM `pwa`.`user_types` ut
 WHERE ut.name IN ('student','teacher','admin','guardian')
   AND NOT EXISTS (SELECT 1 FROM `pwa`.`permissions` p WHERE p.user_type_id = ut.id);
 
--- Nota: existem duas tabelas relacionadas a subscriptions para compatibilidade:
--- `push_subscriptions` e `subscriptions`. Considere consolidá-las em uma
--- única tabela em uma migração futura para evitar duplicidade. Ambas foram
--- mantidas aqui para compatibilidade com o código atual.
-
--- Nota: o arquivo `frontend/public/service-worker.js` deve ser servido na raiz do
--- domínio como `/service-worker.js` após o deploy. Garanta que o servidor copie
--- ou sirva esse arquivo corretamente (ex.: copiar para `build/` ou configurar
--- rota específica no Express).
 
 SET SQL_MODE=@OLD_SQL_MODE;
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;
