@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import api from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import logo from '../assets/ifsul-logo.svg';
@@ -31,7 +32,7 @@ const Login = () => {
     try {
       // Enviar dados de login para o backend
       console.log('Enviando dados para login:', { login, senha });
-      const response = await axios.post('http://localhost:5000/api/users/login', { login, senha }, { withCredentials: true });
+      const response = await api.post('/users/login', { login, senha });
       console.log('Resposta do servidor:', response.data);
       console.log('Status da resposta:', response.status);
 
@@ -153,7 +154,7 @@ const Login = () => {
               const auth = subscription.getKey('auth') ? btoa(String.fromCharCode.apply(null, new Uint8Array(subscription.getKey('auth')))) : null;
 
               if (p256dh && auth) {
-                await axios.post('http://localhost:5000/api/users/subscribe', {
+                await api.post('/users/subscribe', {
                   endpoint: subscription.endpoint,
                   keys: {
                     p256dh,
