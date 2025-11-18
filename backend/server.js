@@ -11,7 +11,7 @@ const { removeInvalidSubscriptions } = require('./controllers/userController');
 const { startScheduledNotificationsWorker } = require('./cron/scheduledNotificationsWorker');
 
 const app = express();
-// Load .env in development for convenience
+// Carregar .env em desenvolvimento para conveniência
 if (process.env.NODE_ENV !== 'production') {
   try { require('dotenv').config(); } catch (e) { /* ignore if dotenv not installed */ }
 }
@@ -20,7 +20,7 @@ const port = process.env.PORT || 5000;
 
 const cron = require('node-cron');
 
-// Parse cookies (used by auth middleware)
+// Fazer parse de cookies (usado pelo middleware de autenticação)
 const cookieParser = require('cookie-parser');
 app.use(cookieParser());
 
@@ -42,9 +42,16 @@ startScheduledNotificationsWorker();
 
 // CORS: permitir origem configurável e enviar credenciais (cookies)
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || 'http://localhost:3000';
+// Suportar uma lista separada por vírgula de origens permitidas do frontend (útil para preview/prod)
+const allowedOrigins = FRONTEND_ORIGIN.split(',').map(s => s.trim()).filter(Boolean);
 const corsOptions = {
-  origin: FRONTEND_ORIGIN,
-  credentials: true, // Allow cookies to be sent
+  origin: (origin, callback) => {
+    // Permitir requisições não originadas do navegador (ex.: server-to-server, curl) quando origin for undefined
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true, // Permitir envio de cookies
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   exposedHeaders: ['Content-Length', 'X-Kuma-Revision']
@@ -56,12 +63,12 @@ app.use(bodyParser.json());
 
 const webpush = require('web-push');
 
-// VAPID keys must be provided via environment variables in production.
+// As chaves VAPID devem ser fornecidas via variáveis de ambiente em produção.
 const publicVapidKey = process.env.PUBLIC_VAPID_KEY;
 const privateVapidKey = process.env.PRIVATE_VAPID_KEY;
 const vapidContact = process.env.VAPID_CONTACT || 'mailto:giulianerodrigues.ch297@academico.ifsul.edu.br';
 
-// Fail-fast in production when critical secrets are missing
+// Falhar rápido em produção quando segredos críticos estiverem ausentes
 if (process.env.NODE_ENV === 'production') {
   if (!privateVapidKey) {
     console.error('ERROR: PRIVATE_VAPID_KEY is not set. Set PRIVATE_VAPID_KEY in the environment before starting in production.');
@@ -85,7 +92,11 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'secret',
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: process.env.NODE_ENV === 'production' }
+  cookie: {
+    // Em produção devemos usar cookie.secure = true e sameSite = 'none' para permitir cookies cross-site
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+  }
 }));
 
 app.use('/api/users', userRoutes);
@@ -95,7 +106,7 @@ app.use('/api/admin', adminRoutes);
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-  // Log pending scheduled notifications once at startup for debugging convenience
+  // Registrar a quantidade de notificações agendadas pendentes no startup para ajudar no debug
   (async () => {
     try {
       const [rows] = await pool.execute('SELECT COUNT(*) as cnt FROM scheduled_notifications WHERE sent = 0');
