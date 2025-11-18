@@ -49,7 +49,8 @@ const corsOptions = {
     // Permitir requisições não originadas do navegador (ex.: server-to-server, curl) quando origin for undefined
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) !== -1) return callback(null, true);
-    return callback(new Error('Not allowed by CORS'));
+    console.warn(`CORS: origem bloqueada -> ${origin}. Origens permitidas: ${allowedOrigins.join(',')}`);
+    return callback(null, false);
   },
   credentials: true, // Permitir envio de cookies
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -103,6 +104,27 @@ app.use('/api/users', userRoutes);
 app.use('/api/events', eventoRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/admin', adminRoutes);
+
+// Debug: log cada requisição breve com método e Origin para ajudar a diagnosticar CORS/OPTIONS
+app.use((req, res, next) => {
+  try {
+    console.log(`REQ ${req.method} ${req.originalUrl} Origin:${req.headers.origin || '<none>'}`);
+  } catch (e) {
+    // ignore
+  }
+  next();
+});
+
+// Middleware global de erro para logar stacks e retornar JSON simples
+app.use((err, req, res, next) => {
+  try {
+    console.error('Express error handler caught:', err && err.stack ? err.stack : err);
+  } catch (e) {
+    console.error('Express error when logging error:', e && e.stack ? e.stack : e);
+  }
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
