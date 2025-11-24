@@ -39,9 +39,18 @@ const GerenciarGrupos = () => {
     const [searchName, setSearchName] = useState('');
     const [filterType, setFilterType] = useState('all');
 
+	// Paginação
+	const [currentPage, setCurrentPage] = useState(1);
+	const groupsPerPage = 20;
+
 	useEffect(() => {
 		carregarGrupos();
 	}, []);
+
+	// reset page when filters or groups change
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [searchName, filterType, grupos]);
 
 	const carregarGrupos = async () => {
 		try {
@@ -74,11 +83,11 @@ const GerenciarGrupos = () => {
 					return Array.isArray(pub.data) ? pub.data : [];
 				} catch (e) {
 					console.error('Erro ao carregar grupos publicos:', e);
-					setMessage('❌ Sem permissão para ver grupos');
+					setMessage('Sem permissão para ver grupos');
 					return null;
 				}
 			} else {
-				setMessage('❌ Erro ao carregar grupos');
+				setMessage('Erro ao carregar grupos');
 				return null;
 			}
 		} finally {
@@ -90,7 +99,7 @@ const GerenciarGrupos = () => {
 		e.preventDefault();
     
 		if (!novoGrupo.name.trim()) {
-			setMessage('❌ Nome do grupo é obrigatório');
+			setMessage('Nome do grupo é obrigatório');
 			return;
 		}
 
@@ -116,10 +125,10 @@ const GerenciarGrupos = () => {
 				if (created && Array.isArray(fetched) && !fetched.find(g => Number(g.id) === Number(created.id))) {
 					setGrupos(prev => [created, ...prev.filter(g => Number(g.id) !== Number(created.id))]);
 				}
-				setMessage('✅ Grupo criado com sucesso!');
+				setMessage('Grupo criado com sucesso!');
 			} catch (error) {
 				console.error('Erro ao criar grupo:', error);
-				setMessage(`❌ ${error.response?.data?.message || 'Erro ao criar grupo'}`);
+				setMessage(`${error.response?.data?.message || 'Erro ao criar grupo'}`);
 			} finally {
 				setSubmitting(false);
 			}
@@ -131,12 +140,12 @@ const GerenciarGrupos = () => {
 		try {
 			await api.put(`/groups/${selectedGroup.id}`, selectedGroup);
 
-			setMessage('✅ Grupo atualizado com sucesso!');
+			setMessage('Grupo atualizado com sucesso!');
 			setEditModalIsOpen(false);
 			carregarGrupos();
 		} catch (error) {
 			console.error('Erro ao atualizar grupo:', error);
-			setMessage(`❌ ${error.response?.data?.message || 'Erro ao atualizar grupo'}`);
+			setMessage(`${error.response?.data?.message || 'Erro ao atualizar grupo'}`);
 		}
 	};
 
@@ -148,7 +157,7 @@ const GerenciarGrupos = () => {
 		try {
 			await api.delete(`/groups/${groupId}`);
 
-			setMessage('✅ Grupo deletado com sucesso!');
+			setMessage('Grupo deletado com sucesso!');
 			carregarGrupos();
 		} catch (error) {
 			console.error('Erro ao deletar grupo:', error);
@@ -156,7 +165,7 @@ const GerenciarGrupos = () => {
 			let serverMsg = error?.response?.data?.message || error?.response?.data?.error;
 			if (!serverMsg && error?.response && typeof error.response.data === 'string') serverMsg = error.response.data;
 			if (!serverMsg) serverMsg = error.message || 'Erro ao deletar grupo';
-			setMessage(`❌ ${serverMsg}`);
+			setMessage(`${serverMsg}`);
 		}
 	};
 
@@ -174,10 +183,10 @@ const GerenciarGrupos = () => {
 
 			// Recarregar membros
 			verMembros(selectedGroup);
-			setMessage('✅ Usuário adicionado ao grupo!');
+			setMessage('Usuário adicionado ao grupo!');
 		} catch (error) {
 			console.error('Erro ao adicionar membro:', error);
-			setMessage(`❌ ${error.response?.data?.message || 'Erro ao adicionar membro'}`);
+			setMessage(`${error.response?.data?.message || 'Erro ao adicionar membro'}`);
 		}
 	};
 
@@ -191,10 +200,10 @@ const GerenciarGrupos = () => {
 
 			// Recarregar membros
 			verMembros(selectedGroup);
-			setMessage('✅ Usuário removido do grupo!');
+			setMessage('Usuário removido do grupo!');
 		} catch (error) {
 			console.error('Erro ao remover membro:', error);
-			setMessage(`❌ ${error.response?.data?.message || 'Erro ao remover membro'}`);
+			setMessage(`${error.response?.data?.message || 'Erro ao remover membro'}`);
 		}
 	};
 
@@ -220,12 +229,18 @@ const GerenciarGrupos = () => {
 		);
 	}
 
-	const filteredGrupos = grupos.filter(g => {
+    const filteredGrupos = grupos.filter(g => {
 		const q = searchName.trim().toLowerCase();
 		if (q && !(g.name || '').toLowerCase().includes(q)) return false;
 		if (filterType !== 'all' && String(g.group_type) !== String(filterType)) return false;
 		return true;
 	});
+
+	
+
+	const totalPages = Math.max(1, Math.ceil(filteredGrupos.length / groupsPerPage));
+	const startIndex = (currentPage - 1) * groupsPerPage;
+	const displayedGrupos = filteredGrupos.slice(startIndex, startIndex + groupsPerPage);
 
 	return (
 		<div className="container mt-4">
@@ -233,7 +248,7 @@ const GerenciarGrupos = () => {
 	            <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap">
 				<div className="d-flex align-items-center">
 					{/* Botão Voltar */}
-					<Button as="button" variant="secondary" size="md" className="me-3" onClick={() => navigate(-1)}>Voltar</Button>
+					<Button as="button" variant="secondary" size="md" className="app-btn--fixed app-btn--primary-shape me-3" onClick={() => navigate(-1)}>Voltar</Button>
 					<div>
 						<h2 className="mb-1">Gerenciar Grupos</h2>
 						<p className="text-muted">Organize usuários em grupos para controle de acesso a eventos</p>
@@ -257,7 +272,7 @@ const GerenciarGrupos = () => {
 
 			{/* Mensagem */}
 			{message && (
-				<div className={`alert border-0 ${message.includes('✅') ? 'alert-success' : 'alert-danger'}`} role="alert">
+				<div className={`alert border-0 ${message.includes('sucesso') ? 'alert-success' : 'alert-danger'}`} role="alert">
 					{message}
 				</div>
 			)}
@@ -276,7 +291,7 @@ const GerenciarGrupos = () => {
 							<p className="text-muted">Nenhum grupo corresponde aos filtros.</p>
 						</div>
 					) : (
-						filteredGrupos.map((grupo) => {
+						displayedGrupos.map((grupo) => {
 							return (
 								<div key={grupo.id} className="col-md-6 col-lg-4 mb-4">
 									<div className="card h-100 group-card shadow-sm">
@@ -340,6 +355,15 @@ const GerenciarGrupos = () => {
 						)}
 					</div>
 			)}
+
+				{/* Paginação */}
+				{filteredGrupos.length > groupsPerPage && (
+					<div className="pagination mt-3 d-flex align-items-center justify-content-center">
+						<button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="btn btn-sm btn-light me-2">Anterior</button>
+						<span style={{ margin: '0 12px', color: '#6BA82C', fontWeight: 'bold' }}>{`Página ${currentPage} de ${totalPages} (${filteredGrupos.length} grupo${filteredGrupos.length !== 1 ? 's' : ''})`}</span>
+						<button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="btn btn-sm btn-light ms-2">Próxima</button>
+					</div>
+				)}
 
 					{/* Modal Criar Grupo - Card overlay (melhor contraste) */}
 					{modalIsOpen && (

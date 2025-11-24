@@ -1,0 +1,403 @@
+const db = require('../db');
+const webpush = require('web-push');
+
+/**
+ * Retorna linhas brutas de eventos visíveis para o usuário fornecido.
+ * Recebe o objeto decodificado do token (req.user) ou um userId numérico.
+ * Retorna um objeto: { events: Array, effectiveUserId }
+ */
+async function getEventosForUser(reqUser) {
+  const userId = (reqUser && reqUser.userId) || reqUser;
+
+  // comportamento idêntico ao original em eventoController.getEventos
+  const [userInfo] = await db.execute(`
+    SELECT ut.name as user_type, p.can_view_all_events
+    FROM users u 
+    JOIN user_types ut ON u.user_type_id = ut.id
+    JOIN permissions p ON ut.id = p.user_type_id
+    WHERE u.id = ?
+  `, [userId]);
+
+  if (!userInfo.length) {
+    const err = new Error('Usuário não encontrado');
+    err.code = 'USER_NOT_FOUND';
+    throw err;
+  }
+
+  const userType = userInfo[0].user_type;
+  const canViewAll = userInfo[0].can_view_all_events;
+
+  let effectiveUserId = userId;
+  let effectiveUserType = userType;
+  try {
+    if (String(userType).toLowerCase() === 'responsavel' || String(userType).toLowerCase() === 'guardian') {
+      const [guardRows] = await db.execute('SELECT student_id FROM guardians WHERE guardian_id = ?', [userId]);
+      if (guardRows && guardRows.length > 0) {
+        effectiveUserId = guardRows[0].student_id;
+        const [stuRows] = await db.execute('SELECT ut.name as user_type FROM users u JOIN user_types ut ON u.user_type_id = ut.id WHERE u.id = ?', [effectiveUserId]);
+        if (stuRows && stuRows.length > 0) effectiveUserType = stuRows[0].user_type;
+      }
+    }
+  } catch (guardErr) {
+    // swallow and continue with original user
+  }
+
+  let query;
+  let params = [];
+
+  if (canViewAll) {
+    query = `
+      SELECT DISTINCT e.*, 
+             CONCAT(u.first_name, ' ', u.last_name) as created_by,
+             ut.name as creator_type,
+             GROUP_CONCAT(DISTINCT g.name) as grupos,
+             e.target_user_types
+      FROM events e
+      LEFT JOIN users u ON e.user_id = u.id
+      LEFT JOIN user_types ut ON u.user_type_id = ut.id
+      LEFT JOIN event_groups eg ON e.id = eg.event_id
+      LEFT JOIN \`groups\` g ON eg.group_id = g.id
+      GROUP BY e.id
+      ORDER BY e.event_datetime ASC
+    `;
+  } else {
+    const typeMap = {
+      'aluno': ['aluno','student'],
+      'professor': ['professor','teacher'],
+      'responsavel': ['responsavel','guardian'],
+      'admin': ['admin']
+    };
+
+    const variants = typeMap[effectiveUserType] || [effectiveUserType];
+    const jsonCandidates = variants.map(v => JSON.stringify(v));
+    const likeCandidates = variants.map(v => `%${v}%`);
+    const containsClauses = variants.map(() => '(JSON_CONTAINS(e.target_user_types, ?) OR e.target_user_types LIKE ?)').join(' OR ');
+
+    query = `
+      SELECT DISTINCT e.*, 
+             CONCAT(u.first_name, ' ', u.last_name) as created_by,
+             ut.name as creator_type,
+             GROUP_CONCAT(DISTINCT g.name) as grupos,
+             e.target_user_types
+      FROM events e
+      LEFT JOIN users u ON e.user_id = u.id
+      LEFT JOIN user_types ut ON u.user_type_id = ut.id
+      LEFT JOIN event_groups eg ON e.id = eg.event_id
+      LEFT JOIN \`groups\` g ON eg.group_id = g.id
+      WHERE (
+        (e.target_user_types IS NULL OR (${containsClauses}))
+        AND (
+          (e.groups_combined = 0 
+           AND (
+             NOT EXISTS (
+               SELECT 1 FROM event_groups eg0 WHERE eg0.event_id = e.id
+             )
+             OR e.id IN (
+               SELECT DISTINCT eg2.event_id 
+               FROM event_groups eg2
+               JOIN user_groups ug ON eg2.group_id = ug.group_id
+               WHERE ug.user_id = ?
+             )
+           ))
+          OR
+          (e.groups_combined = 1
+           AND e.id IN (
+             SELECT eg3.event_id
+             FROM event_groups eg3
+             WHERE eg3.event_id NOT IN (
+               SELECT DISTINCT eg4.event_id
+               FROM event_groups eg4
+               WHERE eg4.group_id NOT IN (
+                 SELECT ug2.group_id
+                 FROM user_groups ug2
+                 WHERE ug2.user_id = ?
+               )
+             )
+           ))
+        )
+      )
+      GROUP BY e.id
+      ORDER BY e.event_datetime ASC
+    `;
+
+    const interleaved = [];
+    for (let i = 0; i < jsonCandidates.length; i++) {
+      interleaved.push(jsonCandidates[i], likeCandidates[i]);
+    }
+    params = [...interleaved, effectiveUserId, effectiveUserId];
+  }
+
+  try {
+    const result = await db.execute(query, params);
+    return { events: result[0], effectiveUserId };
+  } catch (queryErr) {
+    if (queryErr && queryErr.code === 'ER_BAD_FIELD_ERROR' && /target_user_types/.test(queryErr.message)) {
+      // fallback: rebuild query without target_user_types
+      if (canViewAll) {
+        query = `
+          SELECT DISTINCT e.*, 
+                 CONCAT(u.first_name, ' ', u.last_name) as created_by,
+                 ut.name as creator_type,
+                 GROUP_CONCAT(DISTINCT g.name) as grupos
+          FROM events e
+          LEFT JOIN users u ON e.user_id = u.id
+          LEFT JOIN user_types ut ON u.user_type_id = ut.id
+          LEFT JOIN event_groups eg ON e.id = eg.event_id
+          LEFT JOIN \`groups\` g ON eg.group_id = g.id
+          GROUP BY e.id
+          ORDER BY e.event_datetime ASC
+        `;
+        params = [];
+      } else {
+        query = `
+          SELECT DISTINCT e.*, 
+                 CONCAT(u.first_name, ' ', u.last_name) as created_by,
+                 ut.name as creator_type,
+                 GROUP_CONCAT(DISTINCT g.name) as grupos
+          FROM events e
+          LEFT JOIN users u ON e.user_id = u.id
+          LEFT JOIN user_types ut ON u.user_type_id = ut.id
+          LEFT JOIN event_groups eg ON e.id = eg.event_id
+          LEFT JOIN \`groups\` g ON eg.group_id = g.id
+          WHERE (
+            (
+              (e.groups_combined = 0 
+               AND (
+                 NOT EXISTS (
+                   SELECT 1 FROM event_groups eg0 WHERE eg0.event_id = e.id
+                 )
+                 OR e.id IN (
+                   SELECT DISTINCT eg2.event_id 
+                   FROM event_groups eg2
+                   JOIN user_groups ug ON eg2.group_id = ug.group_id
+                   WHERE ug.user_id = ?
+                 )
+               ))
+              OR
+              (e.groups_combined = 1
+               AND e.id IN (
+                 SELECT eg3.event_id
+                 FROM event_groups eg3
+                 WHERE eg3.event_id NOT IN (
+                   SELECT DISTINCT eg4.event_id
+                   FROM event_groups eg4
+                   WHERE eg4.group_id NOT IN (
+                     SELECT ug2.group_id
+                     FROM user_groups ug2
+                     WHERE ug2.user_id = ?
+                   )
+                 )
+               ))
+            )
+          )
+          GROUP BY e.id
+          ORDER BY e.event_datetime ASC
+        `;
+        params = [effectiveUserId, effectiveUserId];
+      }
+
+      const resultAlt = await db.execute(query, params);
+      return { events: resultAlt[0], effectiveUserId };
+    }
+    throw queryErr;
+  }
+}
+
+module.exports = {
+  getEventosForUser
+};
+
+/**
+ * Cria um evento com dados fornecidos e opcionalmente associa grupos e agenda/ envia notificações.
+ * @param {Object} data - campos do formulário / payload
+ * @param {Object} reqUser - objeto decodificado do token (req.user)
+ * @returns {Object} { id }
+ */
+async function createEvent(data, reqUser) {
+  const user_id = reqUser?.userId || data.user_id || null;
+  let connection;
+  try {
+    connection = await db.getConnection();
+    // montar colunas dinamicamente
+    const columns = [];
+    const placeholders = [];
+    const values = [];
+    if (data.titulo || data.title) { columns.push('title'); placeholders.push('?'); values.push(data.titulo || data.title); }
+    if (data.descricao || data.description) { columns.push('description'); placeholders.push('?'); values.push(data.descricao || data.description); }
+    if (data.tipo || data.type) { columns.push('type'); placeholders.push('?'); values.push(data.tipo || data.type); }
+    if (user_id) { columns.push('user_id'); placeholders.push('?'); values.push(user_id); }
+    let isPublicValue = null;
+    const is_public = data.publico || data.is_public;
+    if (typeof is_public === 'string') {
+      if (is_public.toLowerCase() === 'publico') isPublicValue = 1;
+      else if (is_public.toLowerCase() === 'privado') isPublicValue = 0;
+    } else if (typeof is_public === 'number') {
+      isPublicValue = is_public;
+    }
+    if (isPublicValue !== null) { columns.push('is_public'); placeholders.push('?'); values.push(isPublicValue); }
+    const event_datetime = data.data_horario_evento || data.event_datetime || data.event_datetime_raw;
+    if (event_datetime) { columns.push('event_datetime'); placeholders.push('?'); values.push(event_datetime); }
+    if (data.data_period_start) { columns.push('data_period_start'); placeholders.push('?'); values.push(data.data_period_start); }
+    if (data.data_period_end) { columns.push('data_period_end'); placeholders.push('?'); values.push(data.data_period_end); }
+    if (typeof data.mostrar_data !== 'undefined') { columns.push('mostrar_data'); placeholders.push('?'); values.push(data.mostrar_data ? 1 : 0); }
+    if (typeof data.mostrar_apenas_na_data !== 'undefined') { columns.push('mostrar_apenas_na_data'); placeholders.push('?'); values.push(data.mostrar_apenas_na_data ? 1 : 0); }
+    if (data.local_evento || data.event_location) { columns.push('event_location'); placeholders.push('?'); values.push(data.local_evento || data.event_location); }
+
+    const insertSql = `INSERT INTO events (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
+    const [result] = await connection.execute(insertSql, values);
+    const eventoId = result.insertId;
+
+    // target_user_types
+    const target_user_types = data.target_user_types || data.targetUserTypes;
+    if (target_user_types && Array.isArray(target_user_types)) {
+      try {
+        await connection.execute('UPDATE events SET target_user_types = ? WHERE id = ?', [JSON.stringify(target_user_types), eventoId]);
+      } catch (updateError) {
+        // coluna pode não existir, ignorar
+      }
+    }
+
+    // associa grupos
+    const selectedGroups = data.selectedGroups || data.grupos || data.selected_groups;
+    if (Array.isArray(selectedGroups) && selectedGroups.length > 0) {
+      for (const groupId of selectedGroups) {
+        await connection.execute('INSERT INTO event_groups (event_id, group_id) VALUES (?, ?)', [eventoId, groupId]);
+      }
+    }
+
+    await connection.commit();
+
+    // processar envio/agendamento de notificações (sem bloquear criação)
+    const sendNotification = data.sendNotification === true || data.sendNotification === 'true' || data.sendNotification === 1 || data.sendNotification === '1';
+    const sendNotificationMode = data.sendNotificationMode || data.send_notification_mode || 'scheduled';
+    const scheduledNotificationDatetime = data.scheduledNotificationDatetime || data.scheduled_notification_datetime;
+
+    if (sendNotification) {
+      (async () => {
+        const payload = JSON.stringify({ title: 'Novo evento', body: `Um novo evento foi criado: ${data.titulo || data.title}`, data: { eventoId } });
+        const containsTime = (s) => { if (!s) return false; return /T|\s+\d{2}:\d{2}|:\d{2}/.test(String(s)); };
+        const DEFAULT_NOTIFICATION_TIME = process.env.DEFAULT_EVENT_NOTIFICATION_TIME || '09:00:00';
+        try {
+          if (String(sendNotificationMode).toLowerCase() === 'immediate' || String(sendNotificationMode).toLowerCase() === 'now') {
+            const [subscriptions] = await db.execute("SELECT * FROM subscriptions WHERE endpoint NOT LIKE 'decision:%'");
+            for (const sub of subscriptions) {
+              const pushSubscription = { endpoint: sub.endpoint, keys: { p256dh: sub.keys_p256dh, auth: sub.keys_auth } };
+              try {
+                await webpush.sendNotification(pushSubscription, payload);
+              } catch (err) {
+                if (err.statusCode === 410) {
+                  try { await db.execute('DELETE FROM subscriptions WHERE endpoint = ?', [sub.endpoint]); } catch (delErr) { /* ignore */ }
+                }
+              }
+            }
+          } else {
+            let scheduledAt = null;
+            if (scheduledNotificationDatetime) scheduledAt = String(scheduledNotificationDatetime).replace('T',' ');
+            else if (event_datetime && containsTime(event_datetime)) scheduledAt = String(event_datetime).replace('T',' ');
+            else if (data.data_period_start) scheduledAt = `${data.data_period_start} ${DEFAULT_NOTIFICATION_TIME}`;
+            else scheduledAt = new Date().toISOString().slice(0,19).replace('T',' ');
+            try {
+              await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventoId, payload, scheduledAt]);
+            } catch (schedErr) { /* ignore scheduling errors */ }
+          }
+        } catch (pushErr) { /* ignore */ }
+      })();
+    }
+
+    if (connection) try { connection.release(); } catch (e) {}
+    return { id: eventoId };
+  } catch (err) {
+    try { if (connection) await connection.rollback(); } catch (rbErr) {}
+    try { if (connection) connection.release(); } catch (relErr) {}
+    throw err;
+  }
+}
+
+/**
+ * Atualiza um evento. Faz verificação de propriedade/permissão.
+ * @param {number} eventId
+ * @param {Object} data
+ * @param {Object} reqUser
+ */
+async function updateEvent(eventId, data, reqUser) {
+  // verificar proprietário/perm
+  const [rows] = await db.execute('SELECT user_id FROM events WHERE id = ?', [eventId]);
+  if (!rows || rows.length === 0) throw Object.assign(new Error('Evento não encontrado'), { status: 404 });
+  const ownerId = rows[0].user_id;
+  const userId = reqUser?.userId;
+  const isAdmin = Boolean(reqUser?.permissions && (reqUser.permissions.canViewAllEvents || reqUser.permissions.can_create_user || reqUser.permissions.canCreateUser)) || reqUser?.userTypeId === 1 || String(reqUser?.userType).toLowerCase() === 'admin';
+  if (Number(ownerId) !== Number(userId) && !isAdmin) throw Object.assign(new Error('Apenas o criador ou administrador pode editar este evento'), { status: 403 });
+
+  // executar update
+  await db.execute(
+    `UPDATE events SET title = ?, description = ?, type = ?, is_public = ?, event_datetime = ?, data_period_start = ?, data_period_end = ?, mostrar_data = ?, mostrar_apenas_na_data = ?, event_location = ?, groups_combined = ? WHERE id = ?`,
+    [data.titulo || data.title || null, data.descricao || data.description || null, data.tipo || data.type || null, (data.publico === 'publico' ? 1 : 0), data.data_horario_evento || data.event_datetime || null, data.data_period_start || null, data.data_period_end || null, typeof data.mostrar_data !== 'undefined' ? (data.mostrar_data ? 1 : 0) : 1, typeof data.mostrar_apenas_na_data !== 'undefined' ? (data.mostrar_apenas_na_data ? 1 : 0) : 0, data.local_evento || data.event_location || null, data.isGroupsCombined ? 1 : 0, eventId]
+  );
+
+  // target_user_types
+  const target_user_types = data.target_user_types || data.targetUserTypes;
+  if (target_user_types && Array.isArray(target_user_types)) {
+    try { await db.execute('UPDATE events SET target_user_types = ? WHERE id = ?', [JSON.stringify(target_user_types), eventId]); } catch (err) {}
+  }
+
+  // grupos: deletar e reinserir
+  const selectedGroups = data.selectedGroups || data.grupos || data.selected_groups;
+  if (Array.isArray(selectedGroups)) {
+    await db.execute('DELETE FROM event_groups WHERE event_id = ?', [eventId]);
+    for (const gid of selectedGroups) {
+      await db.execute('INSERT INTO event_groups (event_id, group_id) VALUES (?, ?)', [eventId, gid]);
+    }
+  }
+
+  // notificações: similar a createEvent
+  const sendNotification = data.sendNotification === true || data.sendNotification === 'true' || data.sendNotification === 1 || data.sendNotification === '1';
+  const sendNotificationMode = data.sendNotificationMode || data.send_notification_mode || 'scheduled';
+  const scheduledNotificationDatetime = data.scheduledNotificationDatetime || data.scheduled_notification_datetime;
+  if (sendNotification) {
+    (async () => {
+      const payload = JSON.stringify({ title: 'Evento atualizado', body: `Evento atualizado: ${data.titulo || data.title || 'Sem título'}`, data: { eventoId: eventId } });
+      try {
+        if (String(sendNotificationMode).toLowerCase() === 'immediate' || String(sendNotificationMode).toLowerCase() === 'now') {
+          const [subscriptions] = await db.execute("SELECT * FROM subscriptions WHERE endpoint NOT LIKE 'decision:%'");
+          for (const sub of subscriptions) {
+            const pushSubscription = { endpoint: sub.endpoint, keys: { p256dh: sub.keys_p256dh, auth: sub.keys_auth } };
+            try { await webpush.sendNotification(pushSubscription, payload); } catch (err) { if (err.statusCode === 410) try { await db.execute('DELETE FROM subscriptions WHERE endpoint = ?', [sub.endpoint]); } catch(e){} }
+          }
+        } else {
+          const DEFAULT_NOTIFICATION_TIME = process.env.DEFAULT_EVENT_NOTIFICATION_TIME || '09:00:00';
+          const containsTime = (s) => { if (!s) return false; return /T|\s+\d{2}:\d{2}|:\d{2}/.test(String(s)); };
+          let scheduledAt = null;
+          const event_datetime = data.data_horario_evento || data.event_datetime;
+          if (scheduledNotificationDatetime) scheduledAt = String(scheduledNotificationDatetime).replace('T',' ');
+          else if (event_datetime && containsTime(event_datetime)) scheduledAt = String(event_datetime).replace('T',' ');
+          else scheduledAt = new Date().toISOString().slice(0,19).replace('T',' ');
+          try { await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventId, payload, scheduledAt]); } catch (err) {}
+        }
+      } catch (err) { }
+    })();
+  }
+
+  return { message: 'Evento atualizado com sucesso' };
+}
+
+/**
+ * Deleta evento verificando permissões
+ */
+async function deleteEvent(eventId, reqUser) {
+  const [rows] = await db.execute('SELECT user_id FROM events WHERE id = ?', [eventId]);
+  if (!rows || rows.length === 0) throw Object.assign(new Error('Evento não encontrado'), { status: 404 });
+  const ownerId = rows[0].user_id;
+  const userId = reqUser?.userId;
+  const isAdmin = Boolean(reqUser?.permissions && (reqUser.permissions.canViewAllEvents || reqUser.permissions.can_create_user || reqUser.permissions.canCreateUser)) || reqUser?.userTypeId === 1 || String(reqUser?.userType).toLowerCase() === 'admin';
+  if (Number(ownerId) !== Number(userId) && !isAdmin) throw Object.assign(new Error('Apenas o criador ou administrador pode deletar este evento'), { status: 403 });
+
+  await db.execute('DELETE FROM event_groups WHERE event_id = ?', [eventId]);
+  await db.execute('DELETE FROM events WHERE id = ?', [eventId]);
+  return { message: 'Evento removido' };
+}
+
+module.exports = Object.assign(module.exports, {
+  createEvent,
+  updateEvent,
+  deleteEvent
+});

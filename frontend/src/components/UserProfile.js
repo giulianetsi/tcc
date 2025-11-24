@@ -191,11 +191,21 @@ const UserProfile = () => {
               <div className="row gy-2">
                 <div className="col-12 col-md-6">
                   <label className="form-label">Nome</label>
-                  <input className="form-control" value={profile.first_name} onChange={e => setProfile(p => ({ ...p, first_name: e.target.value }))} />
+                  <input
+                    className="form-control"
+                    value={profile.first_name}
+                    readOnly
+                    aria-readonly="true"
+                  />
                 </div>
                 <div className="col-12 col-md-6">
                   <label className="form-label">Sobrenome</label>
-                  <input className="form-control" value={profile.last_name} onChange={e => setProfile(p => ({ ...p, last_name: e.target.value }))} />
+                  <input
+                    className="form-control"
+                    value={profile.last_name}
+                    readOnly
+                    aria-readonly="true"
+                  />
                 </div>
                 <div className="col-12 col-md-6">
                   <label className="form-label">Email</label>
@@ -208,8 +218,8 @@ const UserProfile = () => {
               </div>
 
               <div className="mt-3">
-                <Button type="button" variant="primary" size="md" className="app-btn--fixed me-2" onClick={saveProfile}>Salvar</Button>
-                <Button as="button" variant="secondary" size="md" className="app-btn--fixed" onClick={() => navigate('/')}>Voltar</Button>
+                <Button type="button" variant="primary" size="md" className="app-btn--fixed app-btn--primary-shape me-2" onClick={saveProfile}>Salvar</Button>
+                <Button as="button" variant="secondary" size="md" className="app-btn--fixed app-btn--primary-shape" onClick={() => navigate('/')}>Voltar</Button>
               </div>
             </div>
           </div>
@@ -229,8 +239,8 @@ const UserProfile = () => {
                 <input type="password" className="form-control" value={pwd.confirmPassword} onChange={e => setPwd(p => ({ ...p, confirmPassword: e.target.value }))} />
               </div>
               <div className="mt-3 d-flex gap-2 flex-wrap">
-                <Button type="button" variant="primary" size="md" className="app-btn--fixed me-2" onClick={changePassword}>Alterar senha</Button>
-                <Button as="button" variant="secondary" size="md" className="app-btn--fixed" onClick={() => setPwd({ currentPassword: '', newPassword: '', confirmPassword: '' })}>Limpar</Button>
+                <Button type="button" variant="primary" size="md" className="app-btn--fixed app-btn--primary-shape me-2" onClick={changePassword}>Alterar senha</Button>
+                <Button as="button" variant="secondary" size="md" className="app-btn--fixed app-btn--primary-shape" onClick={() => setPwd({ currentPassword: '', newPassword: '', confirmPassword: '' })}>Limpar</Button>
               </div>
             </div>
           </div>

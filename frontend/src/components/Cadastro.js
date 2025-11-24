@@ -4,6 +4,8 @@ import Button from './ui/Button';
 import api from '../services/api';
 
 const Cadastro = () => {
+  // Estado que armazena os valores do formulário.
+  // Mantemos todos os campos aqui para facilitar a submissão em um único payload.
   const [formData, setFormData] = useState({
     nome: '',
     sobrenome: '',
@@ -20,10 +22,14 @@ const Cadastro = () => {
     cpfAluno: ''
   });
 
+  // Mensagens de feedback para o usuário
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  // Listas carregadas do backend: `grupos` contém cursos/turmas/estruturas
   const [grupos, setGrupos] = useState([]);
+  // Grupos/turmas selecionadas pelo usuário (multi-select)
   const [selectedGroups, setSelectedGroups] = useState([]);
+  // Seleção de cursos para professor (vários) e para aluno (um)
   const [selectedCourses, setSelectedCourses] = useState([]); // for professor (multiple)
   const [selectedCourse, setSelectedCourse] = useState(''); // for student (single)
 
@@ -47,7 +53,8 @@ const Cadastro = () => {
     event.preventDefault();
 
     try {
-      // Prepare payload: include selectedGroups and course selections
+      // 1) Preparar o payload que será enviado ao backend.
+      // Inclui os campos do formulário e as seleções de grupos/cursos.
       const payload = { ...formData, selectedGroups };
       if (formData.tipo === 'professor') {
         payload.selectedCourses = selectedCourses;
@@ -58,10 +65,12 @@ const Cadastro = () => {
         payload.selectedCourse = selectedCourse || null;
       }
 
-      // Use axios instance (sends cookies withCredentials) instead of fetch so auth token cookie is included
-  const resp = await api.post('/users/register-user', payload);
+      // 2) Enviar requisição para o endpoint de registro de usuário.
+      // Usamos a instância `api` (axios) que já possui configuração de baseURL
+      // e `withCredentials` para enviar cookies/sessões quando necessário.
+      const resp = await api.post('/users/register-user', payload);
 
-  // axios throws on non-2xx, so if we are here the request succeeded
+      // Se a requisição tiver sucesso (status 2xx), prosseguimos com feedback
       setSuccessMessage('Usuário registrado com sucesso');
       setErrorMessage('');
         // Limpar o formulário após o sucesso
@@ -84,6 +93,7 @@ const Cadastro = () => {
         setSelectedCourses([]);
         setSelectedCourse('');
     } catch (error) {
+      // 3) Tratamento de erro: log no console e mensagem ao usuário.
       console.error('Erro ao registrar usuário:', error);
       setSuccessMessage('');
       setErrorMessage('Erro ao registrar usuário. Verifique o console para detalhes.');
@@ -94,8 +104,10 @@ const Cadastro = () => {
   useEffect(() => {
     const carregarGrupos = async () => {
       try {
+        // 4) Ao montar o componente, carregamos do backend a lista de grupos
+        // (cursos, turmas etc.) para popular os selects/checkboxes.
         const res = await api.get('/groups');
-        // backend may return { data: [...] } or [...] directly
+        // O backend pode retornar nos formatos diferentes; normalizamos para array
         const list = res.data?.data || res.data || [];
         setGrupos(list);
       } catch (err) {
@@ -121,12 +133,18 @@ const Cadastro = () => {
         <div className="col-md-6">
           <div className="cadastro-evento-card card">
             <div className="card-body p-4">
+              {/*
+                5) Formulário de cadastro
+                - O `onSubmit` chama `handleSubmit` que prepara o payload
+                  e faz a requisição ao backend.
+                - Cada input chama `handleChange` para manter `formData` atualizado.
+              */}
               <form onSubmit={handleSubmit}>
-            {/* Formulário aqui */}
+              {/* Campo: nome do usuário */}
               <div className="form-group">
-              <label htmlFor="nome">Nome</label>
-              <input type="text" id="nome" name="nome" className="form-control cadastro-evento-input" value={formData.nome} onChange={handleChange} required />
-            </div>
+                <label htmlFor="nome">Nome</label>
+                <input type="text" id="nome" name="nome" className="form-control cadastro-evento-input" value={formData.nome} onChange={handleChange} required />
+              </div>
             <div className="form-group">
               <label htmlFor="sobrenome">Sobrenome</label>
               <input type="text" id="sobrenome" name="sobrenome" className="form-control cadastro-evento-input" value={formData.sobrenome} onChange={handleChange} required />
@@ -151,6 +169,11 @@ const Cadastro = () => {
               <label htmlFor="cpf">CPF</label>
               <input type="text" id="cpf" name="cpf" className="form-control cadastro-evento-input" value={formData.cpf} onChange={handleChange} required />
             </div>
+            {/*
+              Campo: tipo de usuário
+              - Define quais campos adicionais serão exibidos (aluno/professor/responsável/admin).
+              - A mudança de `formData.tipo` controla render condicional abaixo.
+            */}
             <div className="form-group">
               <label htmlFor="tipo">Tipo</label>
               <select id="tipo" name="tipo" className="form-control cadastro-evento-input" value={formData.tipo} onChange={handleChange} required>
@@ -161,6 +184,7 @@ const Cadastro = () => {
                 <option value="admin">Administrador</option>
               </select>
             </div>
+            {/* Campos específicos para aluno: matrícula, seleção de curso e turmas */}
             {formData.tipo === 'aluno' && (
               <div id="alunoFields">
                 <div className="form-group">
@@ -180,6 +204,7 @@ const Cadastro = () => {
                     <i className="fas fa-info-circle me-1"></i>
                     Selecione as turmas ligadas ao curso escolhido
                   </small>
+                  {/* Lista de turmas (checkboxes) filtrada pelo curso selecionado */}
                   <div className="cadastro-evento-checkbox-group">
                     <div className="row">
                       {grupos.filter(g => ((g.group_type || g.type || '').toLowerCase() === 'turma') && (selectedCourse ? String(g.parent_course_id) === String(selectedCourse) : true)).map(grupo => (
@@ -205,6 +230,7 @@ const Cadastro = () => {
                 </div>
               </div>
             )}
+            {/* Campos específicos para professor: seleção de cursos (multi) e turmas */}
             {formData.tipo === 'professor' && (
               <div id="professorFields">
                 <div className="form-group">
@@ -233,6 +259,7 @@ const Cadastro = () => {
                     </div>
                   </div>
 
+                  {/* Informação para o usuário sobre como selecionar turmas associadas aos cursos */}
                   <small className="text-muted d-block mb-2">
                     <i className="fas fa-info-circle me-1"></i>
                     Selecione as turmas (grupos do tipo <strong>turma</strong>) às quais este professor pertence
@@ -262,6 +289,7 @@ const Cadastro = () => {
                 </div>
               </div>
             )}
+            {/* Campos para responsável: parentesco e CPF do aluno associado */}
             {formData.tipo === 'responsavel' && (
               <div id="responsavelFields">
                 <div className="form-group">
@@ -274,15 +302,17 @@ const Cadastro = () => {
                 </div>
               </div>
             )}
-            <div className="row mt-4 buttons-row">
+            {/* Botões de ação: voltar e registrar */}
+              <div className="row mt-4 buttons-row">
               <div className="col-6 d-flex justify-content-start">
-                <Button as="button" variant="secondary" size="md" className="app-btn--fixed" onClick={() => navigate('/')}>Voltar</Button>
+                <Button as="button" variant="secondary" size="md" className="app-btn--fixed app-btn--primary-shape" onClick={() => navigate('/')}>Voltar</Button>
               </div>
               <div className="col-6 d-flex justify-content-end">
-                <Button type="submit" variant="primary" size="md" className="app-btn--fixed">Registrar</Button>
+                <Button type="submit" variant="primary" size="md" className="app-btn--fixed app-btn--primary-shape">Registrar</Button>
               </div>
             </div>
               </form>
+              {/* Feedback exibido ao usuário após tentativa de submissão */}
               {successMessage && <p className="text-success mt-3">{successMessage}</p>}
               {errorMessage && <p className="text-danger mt-3">{errorMessage}</p>}
             </div>

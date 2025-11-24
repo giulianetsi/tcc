@@ -111,13 +111,12 @@ const ManagePermissions = () => {
     setRows(prev => prev.map(r => r.user_type_id === user_type_id ? JSON.parse(JSON.stringify(originalRows.find(o => o.user_type_id === user_type_id) || r)) : r));
   };
 
-  // Histórico de auditoria removido: esta interface não chama mais endpoints /audit.
 
   return (
     <div className="container mt-4">
         <div className="d-flex justify-content-between align-items-center mb-3">
           <h2 className="m-0">Gerenciar Permissões por Tipo de Usuário</h2>
-          <Button as="button" variant="secondary" size="md" className="app-btn--fixed" onClick={() => navigate('/')}>Voltar</Button>
+          <Button as="button" variant="secondary" size="md" className="app-btn--fixed app-btn--primary-shape" onClick={() => navigate('/')}>Voltar</Button>
         </div>
 
       {message && <div className="alert alert-info" role="status">{message}</div>}

@@ -12,21 +12,33 @@ const COLORS = {
     cerimonia: '#C04D00',  // Cerimônia (atualizado)
     treinamento: '#8E7DBE',// Treinamento
     outros: '#6C737E',     // Outros
-    default: '#F6F6F6'
+    default: '#607d45ff'
 };
 
-// Dados antigos podem usar Tipo1/Tipo2/Tipo3; manter compatibilidade enquanto
-// também reconhecemos palavras localizadas como 'evento', 'reunião', 'aviso'.
+// Mapeamento de correspondência exata (usamos chaves em lowercase)
 const exactMap = {
-    'Tipo1': COLORS.event,
-    'Tipo2': COLORS.reuniao,
-    'Tipo3': COLORS.aviso
+    evento: COLORS.event,
+    event: COLORS.event,
+    reuniao: COLORS.reuniao,
+    reunião: COLORS.reuniao,
+    reun: COLORS.reuniao,
+    aviso: COLORS.aviso,
+    alerta: COLORS.aviso,
+    palestra: COLORS.palestra,
+    workshop: COLORS.workshop,
+    oficina: COLORS.workshop,
+    cerimonia: COLORS.cerimonia,
+    cerimônia: COLORS.cerimonia,
+    treinamento: COLORS.treinamento,
+    outros: COLORS.outros,
 };
+
 
 function getColorForType(tipo) {
     if (!tipo) return COLORS.default;
     // Preferir correspondência exata primeiro
-    if (exactMap[tipo]) return exactMap[tipo];
+    const key = String(tipo).toLowerCase();
+    if (exactMap[key]) return exactMap[key];
 
     const t = String(tipo).toLowerCase();
     if (t.includes('evento') || t.includes('event')) return COLORS.event;

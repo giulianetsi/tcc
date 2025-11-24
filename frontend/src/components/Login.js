@@ -31,7 +31,7 @@ const Login = () => {
 
     try {
       // Enviar dados de login para o backend
-      console.log('Enviando dados para login:', { login, senha });
+      // console.log('Enviando dados para login:', { login, senha });
       const response = await api.post('/users/login', { login, senha });
       console.log('Resposta do servidor:', response.data);
       console.log('Status da resposta:', response.status);
@@ -166,7 +166,7 @@ const Login = () => {
                     'Content-Type': 'application/json'
                   }
                 });
-                console.log('✅ Notificações push configuradas com sucesso!');
+                console.log('Notificações push configuradas com sucesso!');
               } else {
                 console.error('Erro: Chaves da subscription não encontradas');
               }
@@ -176,9 +176,9 @@ const Login = () => {
             }
           }
         } else if (permission === 'denied') {
-          console.log('❌ Permissão para notificações negada pelo usuário');
+          console.log('Permissão para notificações negada pelo usuário');
         } else {
-          console.log('⚠️ Permissão para notificações não solicitada ainda');
+          console.log('Permissão para notificações não solicitada ainda');
         }
         
       } catch (pushError) {

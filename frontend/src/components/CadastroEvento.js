@@ -4,36 +4,49 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import Button from './ui/Button';
 
 const CadastroEvento = () => {
+  // Estados do formulário: campos principais
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [tipo, setTipo] = useState('');
-  // Estado para tipos de usuário como público alvo
-  // Pre-selecionar "Todos" por padrão
+
+  // Público-alvo: tipos de usuário que verão o evento.
+  // Por convenção inicial marcamos todos como true (público amplo).
   const [publicoAlvo, setPublicoAlvo] = useState({
     student: true,    // Alunos
     teacher: true,    // Professores
     guardian: true,   // Responsáveis
     admin: true       // Administradores
   });
+  // Indica se a opção "Todos" está marcada (shortcut para selecionar/desmarcar todos)
   const [publicoTodos, setPublicoTodos] = useState(true);
+
+  // Estados relacionados à data/hora do evento.
+  // Suporta data única ou período.
   const [dataHorarioEvento, setDataHorarioEvento] = useState('');
   const [dateMode, setDateMode] = useState('single'); // 'single' ou 'period'
-  const [singleDate, setSingleDate] = useState(''); // YYYY-MM-DD
-  const [singleTime, setSingleTime] = useState(''); // HH:MM (opcional)
+  const [singleDate, setSingleDate] = useState(''); // formato YYYY-MM-DD para input date
+  const [singleTime, setSingleTime] = useState(''); // formato HH:MM para input time (opcional)
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
+  // Flags que controlam exibição do evento no painel
   const [mostrarData, setMostrarData] = useState(true);
   const [mostrarApenasNaData, setMostrarApenasNaData] = useState(false);
+
+  // Local opcional
   const [localEvento, setLocalEvento] = useState('');
-  // Notificações
+
+  // Notificações: ativação e modo (immediate | scheduled)
   const [sendNotificationChecked, setSendNotificationChecked] = useState(true);
   const [sendNotificationMode, setSendNotificationMode] = useState('scheduled'); // 'immediate' | 'scheduled'
-  const [scheduledNotificationDatetime, setScheduledNotificationDatetime] = useState(''); // YYYY-MM-DDTHH:MM
+  // Data/hora para notificação agendada no formato ISO local (YYYY-MM-DDTHH:MM)
+  const [scheduledNotificationDatetime, setScheduledNotificationDatetime] = useState('');
+
+  // Mensagens de feedback para o usuário (sucesso/erro) e estado de loading
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState(''); // 'success' | 'error' | ''
   const [loading, setLoading] = useState(false);
-  
-  // Novos estados para grupos
+
+  // Estados relacionados a grupos (opcionais): lista de grupos do backend, seleção e modo combinado
   const [grupos, setGrupos] = useState([]);
   const [gruposSelecionados, setGruposSelecionados] = useState([]);
   const [gruposCombinados, setGruposCombinados] = useState(false);
@@ -42,7 +55,8 @@ const CadastroEvento = () => {
   const location = useLocation();
   const editingEvento = location.state && location.state.evento;
 
-  // Se estiver editando, preencher o formulário com os dados do evento
+  // Se estivermos no modo de edição (venho de outro lugar com `location.state.evento`),
+  // preencher os campos iniciais com os valores existentes.
   useEffect(() => {
     if (editingEvento) {
       setTitulo(editingEvento.titulo || '');
@@ -120,7 +134,8 @@ const CadastroEvento = () => {
     }
   }, [editingEvento]);
 
-  // Preencher scheduledNotificationDatetime automaticamente quando o usuário define a data/hora do evento
+  // Quando usuário altera data/hora do evento, preenche automaticamente
+  // o campo de agendamento da notificação (se ainda não definido).
   useEffect(() => {
     if (!scheduledNotificationDatetime) {
       if (dateMode === 'single' && singleDate) {
@@ -133,12 +148,13 @@ const CadastroEvento = () => {
     }
   }, [singleDate, singleTime, periodStart, dateMode]);
 
-  // Carregar grupos disponíveis
+  // Carregar grupos disponíveis do backend para popular a seção "Grupos"
   useEffect(() => {
     const carregarGrupos = async () => {
       try {
         const res = await api.get('/groups');
         // o backend pode retornar { data: [...] } ou um array diretamente
+        // Normalizamos para `res.data` quando possível.
         setGrupos(res.data || []);
       } catch (err) {
         console.error('Erro ao carregar grupos:', err);
@@ -149,6 +165,7 @@ const CadastroEvento = () => {
   }, []);
 
   // Opções para tipo de evento
+  // Tipos de evento usados no select de categoria
   const tiposEvento = [
     { value: 'evento', label: 'Evento' },
     { value: 'reuniao', label: 'Reunião' },
@@ -162,6 +179,7 @@ const CadastroEvento = () => {
 
 
   // Opções para público-alvo
+  // Opções para definição de público (visibilidade)
   const opcoesPublico = [
     { value: 'publico', label: 'Público (visível para todos)' },
     { value: 'privado', label: 'Privado (apenas para administradores)' }
@@ -200,22 +218,26 @@ const CadastroEvento = () => {
     setLoading(true);
     setMessage('');
 
-      // Pegar valor do checkbox de notificação
+      // 1) Estado local: ler checkbox de notificação
   const sendNotification = sendNotificationChecked;
 
-  // Validações adicionais
+  // 2) Validações básicas do formulário
     if (!titulo.trim() || !descricao.trim() || !tipo) {
       setMessage('Por favor, preencha todos os campos obrigatórios.');
+      setMessageType('error');
       setLoading(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-  // Validação de data dependendo do modo
+  // 3) Validação e preparação de datas dependendo do modo (single / period)
     let payloadDate = {};
     if (dateMode === 'single') {
       if (!singleDate) {
         setMessage('Por favor, selecione a data do evento.');
+        setMessageType('error');
         setLoading(false);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
   // Construir string parecida com ISO se o horário for fornecido
@@ -225,46 +247,56 @@ const CadastroEvento = () => {
       const compare = singleTime ? new Date(`${singleDate}T${singleTime}`) : new Date(singleDate + 'T00:00:00');
       if (!isNaN(compare.getTime()) && compare < now) {
         setMessage('A data selecionada não pode ser no passado.');
+        setMessageType('error');
         setLoading(false);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
+      // Adicionar ao payload a data/hora escolhida
       payloadDate.data_horario_evento = dtStr;
     } else {
   // período
       if (!periodStart || !periodEnd) {
         setMessage('Por favor, preencha o período (data inicial e final).');
+        setMessageType('error');
         setLoading(false);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
       const start = new Date(periodStart + 'T00:00:00');
       const end = new Date(periodEnd + 'T23:59:59');
       if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) {
         setMessage('Período inválido: a data final deve ser igual ou posterior à data inicial.');
+        setMessageType('error');
         setLoading(false);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
+      // Em modo period, adicionar início e fim ao payload
       payloadDate.data_period_start = periodStart;
       payloadDate.data_period_end = periodEnd;
     }
 
-  // Validar se pelo menos um tipo de usuário foi selecionado
+  // 4) Validação: garantir que ao menos um público-alvo foi selecionado
     const algumPublicoSelecionado = Object.values(publicoAlvo).some(selected => selected);
     if (!algumPublicoSelecionado) {
       setMessage('Por favor, selecione pelo menos um tipo de usuário como público alvo.');
+      setMessageType('error');
       setLoading(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
 
-  // Preparar lista de tipos de usuário selecionados
+  // 5) Preparar payload: tipos de usuário selecionados
     const tiposUsuarioSelecionados = Object.keys(publicoAlvo).filter(tipo => publicoAlvo[tipo]);
     
-  // Determinar se é público (todos podem ver, independente de grupos)
+  // 6) Determinar se é público (todos os tipos selecionados)
     const todosOsTipos = ['student', 'teacher', 'guardian', 'admin'];
     const ePublico = tiposUsuarioSelecionados.length === todosOsTipos.length && 
                      tiposUsuarioSelecionados.every(tipo => todosOsTipos.includes(tipo));
 
-  // Validação: se o usuário escolheu agendar notificação, não permitir data no passado
+  // 7) Validação do agendamento de notificação: não aceitar datas passadas
     if (sendNotification && sendNotificationMode === 'scheduled') {
       if (!scheduledNotificationDatetime) {
         setMessage('Por favor, selecione data/hora para a notificação agendada.');
@@ -288,6 +320,7 @@ const CadastroEvento = () => {
       }
     }
 
+  // 8) Exibir no console os dados que serão enviados (ajuda em debug)
   console.log('Dados a serem enviados:', {
       titulo: titulo.trim(),
       descricao: descricao.trim(),
@@ -326,10 +359,11 @@ const CadastroEvento = () => {
           sendNotificationMode,
           scheduledNotificationDatetime: sendNotificationMode === 'scheduled' ? scheduledNotificationDatetime : undefined
         });
-  setMessage('✅ Evento atualizado com sucesso!');
-  // notificar o painel para atualizar
-  window.dispatchEvent(new CustomEvent('evento-updated', { detail: { id: editingEvento.id } }));
-        setMessageType('success');
+    // Feedback de sucesso para o usuário e notificação ao painel
+    setMessage('Evento atualizado com sucesso!');
+    setMessageType('success');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.dispatchEvent(new CustomEvent('evento-updated', { detail: { id: editingEvento.id } }));
       } else {
         const response = await api.post('/events/add-evento', {
           titulo: titulo.trim(),
@@ -347,9 +381,11 @@ const CadastroEvento = () => {
           sendNotificationMode,
           scheduledNotificationDatetime: sendNotificationMode === 'scheduled' ? scheduledNotificationDatetime : undefined
         });
-  setMessage('✅ Evento adicionado com sucesso!');
-  window.dispatchEvent(new CustomEvent('evento-created', { detail: { /* payload opcional */ } }));
-        setMessageType('success');
+    // Evento criado com sucesso: limpar formulário e notificar o painel
+    setMessage('Evento adicionado com sucesso!');
+    setMessageType('success');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.dispatchEvent(new CustomEvent('evento-created', { detail: { /* payload opcional */ } }));
 
         // Limpar o formulário após o sucesso
   setTitulo('');
@@ -368,14 +404,16 @@ const CadastroEvento = () => {
     } catch (error) {
       console.error('Erro ao enviar dados:', error);
       
+      // Tratamento de erros: redirecionar ao login se 401 ou exibir mensagem do backend
       if (error.response?.status === 401) {
         setMessage('Sessão expirada. Redirecionando para login...');
         setMessageType('error');
         setTimeout(() => navigate('/login'), 2000);
       } else {
-        setMessage(`❌ ${error.response?.data?.message || 'Erro ao adicionar/atualizar evento'}`);
+        setMessage(`${error.response?.data?.message || 'Erro ao adicionar/atualizar evento'}`);
         setMessageType('error');
       }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } finally {
       setLoading(false);
     }
@@ -391,22 +429,45 @@ const CadastroEvento = () => {
       <div className="cadastro-evento-card card">
         <div className="card-body p-4">
 
-          {/* Mensagem de status (sucesso / erro) */}
+          {/* Mensagem de status (sucesso / erro) - exibida acima do formulário */}
           {message && (
-            <div className={`alert ${messageType === 'success' ? 'alert-success' : 'alert-danger'} d-flex justify-content-between align-items-center`} role="alert">
-              <div>{message}</div>
+            <div className={`alert ${messageType === 'success' ? 'alert-success' : 'alert-danger'}`} role="alert" style={{ position: 'relative', borderRadius: '10px', marginBottom: '16px' }}>
+              {/* Close X no canto superior direito */}
+              <button
+                type="button"
+                aria-label="Fechar"
+                onClick={() => { setMessage(''); setMessageType(''); }}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '12px',
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '18px',
+                  lineHeight: '1',
+                  cursor: 'pointer',
+                  padding: '4px'
+                }}
+              >
+                ×
+              </button>
+
               <div>
+                <div>{message}</div>
                 {messageType === 'success' && (
-                  <Button as="button" variant="outline" size="sm" className="me-2" onClick={() => navigate('/')}>Ir para Painel</Button>
+                  <div style={{ marginTop: '12px' }}>
+                    <span role="button" onClick={() => navigate('/')} style={{ textDecoration: 'underline', cursor: 'pointer' }}>
+                      Ir para o painel
+                    </span>
+                  </div>
                 )}
-                <Button as="button" variant="secondary" size="sm" onClick={() => { setMessage(''); setMessageType(''); }}>Fechar</Button>
               </div>
             </div>
           )}
 
           <form onSubmit={handleSubmit}>
                   
-                  {/* Título */}
+                  {/* Campo: Título do evento (obrigatório) */}
                   <div className="mb-4">
                     <label htmlFor="titulo" className="form-label fw-semibold text-dark mb-2">
                       <i className="fas fa-heading me-2 text-primary"></i>
@@ -427,7 +488,7 @@ const CadastroEvento = () => {
                     </div>
                   </div>
 
-                  {/* Descrição */}
+                  {/* Campo: Descrição do evento (obrigatório) */}
                   <div className="mb-4">
                     <label htmlFor="descricao" className="form-label fw-semibold text-dark mb-2">
                       <i className="fas fa-align-left me-2 text-primary"></i>
@@ -447,7 +508,10 @@ const CadastroEvento = () => {
                     </div>
                   </div>
 
-                  {/* Data e Categoria - Linha */}
+                    {/* Seção: Data e horário do evento
+                      - Permite escolher data única ou período.
+                      - `dateMode` controla qual grupo de inputs é exibido.
+                    */}
                   <div className="row mb-4">
                     <div className="col-12 mb-3"> 
                       <label className="form-label fw-semibold text-dark mb-2">
@@ -509,6 +573,7 @@ const CadastroEvento = () => {
                             </div>
                           )}
 
+                          {/* Opções de exibição do evento no painel */}
                           <div className="form-check mt-2">
                             <input className="form-check-input" type="checkbox" id="mostrarData" checked={mostrarData} onChange={(e) => setMostrarData(e.target.checked)} />
                             <label className="form-check-label text-muted" htmlFor="mostrarData">Mostrar data no card (visível no painel)</label>
@@ -521,6 +586,7 @@ const CadastroEvento = () => {
                     </div>
                   </div>
 
+                  {/* Seção: Categoria / Tipo do evento */}
                   <div className="row mb-4">
                     <div className="col-12">
                       <label htmlFor="tipo" className="form-label fw-semibold text-dark mb-2">
@@ -564,7 +630,10 @@ const CadastroEvento = () => {
                     </div>
                   </div>
 
-                  {/* Público Alvo - Tipos de Usuário */}
+                    {/* Seção: Público-alvo (tipos de usuário)
+                      - Aqui o admin escolhe quais tipos de usuário poderão ver o evento.
+                      - Existe uma opção rápida "Todos" para marcar/desmarcar todas as opções.
+                    */}
                   <div className="mb-4">
                     <label className="form-label fw-semibold text-dark mb-1">
                       <i className="fas fa-users me-2 text-primary"></i>
@@ -691,7 +760,11 @@ const CadastroEvento = () => {
                     </div>
                   </div>
 
-                  {/* Seleção de Grupos */}
+                    {/* Seção: Grupos (opcional)
+                      - Permite restringir o evento a grupos específicos.
+                      - Se nenhum grupo for selecionado e o evento não for privado, o evento é considerado público para os tipos selecionados.
+                      - Modo "Grupos Combinados" altera a lógica para AND em vez de OR.
+                    */}
                   {grupos.length > 0 && (
                     <div className="mb-4">
                       <label className="form-label fw-semibold text-dark mb-1">
@@ -760,7 +833,7 @@ const CadastroEvento = () => {
                     </div>
                   )}
 
-                  {/* Configurações Adicionais (notificação) */}
+                  {/* Seção: Configurações de notificação */}
                   <div className="mb-4">
                     <div className="cadastro-evento-settings p-3">
                       <div className="mb-2">
@@ -793,7 +866,7 @@ const CadastroEvento = () => {
                               <label className="form-check-label" htmlFor="notifScheduled">Agendar notificação</label>
                             </div>
                           </div>
-                          {sendNotificationMode === 'scheduled' && (
+                            {sendNotificationMode === 'scheduled' && (
                             <div className="mt-2">
                               <input type="datetime-local" className="form-control form-control-sm" value={scheduledNotificationDatetime} onChange={(e) => setScheduledNotificationDatetime(e.target.value)} />
                             </div>
@@ -803,15 +876,15 @@ const CadastroEvento = () => {
                     </div>
                   </div>
 
-                  {/* Botões */}
+                  {/* Botões de ação: Voltar e Criar/Atualizar Evento */}
                   <div className="row mt-4 buttons-row">
                     <div className="col-6 d-flex justify-content-start">
-                      <Button as="button" variant="secondary" size="md" className="app-btn--fixed" onClick={() => navigate('/') }>
-                        Voltar
-                      </Button>
+                      <Button as="button" variant="secondary" size="md" className="app-btn--fixed app-btn--primary-shape" onClick={() => navigate('/') }>
+                          Voltar
+                        </Button>
                     </div>
                     <div className="col-6 d-flex justify-content-end">
-                      <Button as="button" type="submit" variant="primary" size="md" className={`${loading ? 'app-btn--disabled' : ''} app-btn--fixed`}>
+                      <Button as="button" type="submit" variant="primary" size="md" className={`${loading ? 'app-btn--disabled' : ''} app-btn--fixed app-btn--primary-shape`}>
                         {loading ? (
                           <>
                             <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
@@ -827,12 +900,7 @@ const CadastroEvento = () => {
                   </div>
                 </form>
 
-                {/* Message */}
-                {message && (
-                  <div className={`alert mt-4 border-0 ${message.includes('✅') ? 'alert-success' : 'alert-danger'}`} role="alert" style={{borderRadius: '10px'}}>
-                    {message}
-                  </div>
-                )}
+                {/* Mensagem final removida — mensagem já exibida no topo do formulário */}
         </div>
       </div>
     </div>
@@ -840,6 +908,7 @@ const CadastroEvento = () => {
 };
 
 // Função auxiliar para ícones dos grupos
+// Retorna a classe do ícone FontAwesome baseada no tipo do grupo
 const getGroupIcon = (type) => {
   switch(type?.toLowerCase()) {
     case 'turma':

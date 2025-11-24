@@ -44,8 +44,22 @@ const GroupMembers = () => {
         api.get(`/groups/${groupId}/members`),
         api.get(`/groups/${groupId}/available-users`),
       ]);
-      setMembers(mResp.data || []);
-      setAvailable(aResp.data || []);
+
+      // Normalize members response: backend may return either an array
+      // or an object like { members: [...] } depending on endpoint.
+      const normalizeArray = (resp) => {
+        if (!resp) return [];
+        const d = resp.data;
+        if (Array.isArray(d)) return d;
+        if (d && Array.isArray(d.members)) return d.members;
+        if (d && Array.isArray(d.users)) return d.users;
+        // If payload itself is an object keyed by ids, convert to array
+        if (d && typeof d === 'object') return Object.values(d);
+        return [];
+      };
+
+      setMembers(normalizeArray(mResp));
+      setAvailable(normalizeArray(aResp));
   // resetar listas pendentes
       setToAdd(new Set());
       setToRemove(new Set());
@@ -60,7 +74,7 @@ const GroupMembers = () => {
   const markAdd = (userId) => {
     setToAdd(prev => new Set(prev).add(userId));
   // UI otimista: remover da lista de disponíveis
-    setAvailable(prev => prev.filter(u => u.id !== userId));
+    setAvailable(prev => (Array.isArray(prev) ? prev.filter(u => u.id !== userId) : []));
   };
 
   const unmarkAdd = (userId) => {
@@ -106,7 +120,7 @@ const GroupMembers = () => {
         }
       }
 
-  setMessage('✅ Alterações salvas com sucesso');
+  setMessage('Alterações salvas com sucesso');
   // recarregar dados
   await fetchData();
     } catch (err) {

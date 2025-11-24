@@ -1,129 +1,65 @@
-app-btn {
+:root{
+  --btn-primary-bg: #6BA82C;
+  --btn-primary-color: #ffffff;
+  --btn-secondary-bg: #ffffff;
+  --btn-secondary-color: #6BA82C;
+  --btn-outline-border: #ced4da;
+}
+
+.app-btn{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  border-radius: 25px; 
-  padding: 12px 30px;
+  gap: .5rem;
   font-weight: 600;
-  font-size: 0.98rem;
-  line-height: 1;
+  border-radius: 8px;
+  padding: 0 .9rem;
+  height: 44px;
+  min-width: 96px;
+  border: 1px solid transparent;
   cursor: pointer;
-  border: none;
-  transition: background-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease, transform 0.06s ease;
-  box-shadow: 0 3px 10px rgba(0,0,0,0.06);
-  min-width: 120px; 
-  min-height: 48px; 
+  transition: background-color .12s ease, color .12s ease, border-color .12s ease, transform .06s ease;
+  user-select: none;
 }
 
-a.app-btn,
-a.app-btn:visited {
-  text-decoration: none;
-  color: inherit;
-}
-
-a.app-btn.app-btn--primary:hover,
-a.app-btn.app-btn--secondary:hover,
-a.app-btn.app-btn--outline:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(0,0,0,0.12);
-}
-
-a.app-btn:focus {
+.app-btn:focus{
   outline: none;
-  box-shadow: 0 0 0 0.2rem rgba(107,168,44,0.18);
+  box-shadow: 0 0 0 3px rgba(77,111,42,0.15);
 }
 
-.app-btn--primary {
-  background: linear-gradient(135deg, #6BA82C, #5c9126);
-  color: #ffffff;
-  border: none;
-  border-radius: 25px;
-  font-weight: 700;
-  box-shadow: 0 6px 18px rgba(92,145,38,0.18);
-  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+.app-btn--primary{
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-color);
+  border-color: transparent;
 }
-.app-btn--primary:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 30px rgba(92,145,38,0.22);
-}
-.app-btn--primary:active {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(92,145,38,0.16) inset;
-}
-.app-btn--primary:focus {
-  outline: none;
-  box-shadow: 0 0 0 0.28rem rgba(107,168,44,0.18);
-}
+.app-btn--primary:hover{ background: #3f5a20; }
 
-.app-btn--secondary {
-  background: #ffffff;
-  color: #4d6f2a;
-  border: 1px solid rgba(107,168,44,0.28);
-  box-shadow: 0 3px 10px rgba(0,0,0,0.04);
-  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+.app-btn--secondary{
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-color);
+  border-color: var(--btn-outline-border);
 }
-.app-btn--secondary:hover {
-  background: rgba(107,168,44,0.06);
-  color: #2f4d18;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.08);
-}
-.app-btn--secondary:active {
-  transform: translateY(0);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.06) inset;
-}
-.app-btn--secondary:focus {
-  outline: none;
-  box-shadow: 0 0 0 0.18rem rgba(107,168,44,0.14);
-}
+.app-btn--secondary:hover{ background: #f5f7f5; }
 
-
-.app-btn--tertiary {
+.app-btn--outline{
   background: transparent;
-  color: #5c9126; 
-  border: none;
-  padding: 8px 14px;
+  color: var(--btn-primary-bg);
+  border-color: var(--btn-primary-bg);
 }
-.app-btn--tertiary:hover {
-  background: rgba(92,145,38,0.06);
-  transform: translateY(-1px);
-}
-.app-btn--tertiary:active { transform: translateY(0); }
-.app-btn--tertiary:focus { box-shadow: 0 0 0 0.12rem rgba(92,145,38,0.12); }
+.app-btn--outline:hover{ background: rgba(77,111,42,0.06); }
 
+.app-btn--md{ height:44px; padding: 0 14px; font-size: 15px; }
+.app-btn--sm{ height:36px; padding: 0 10px; font-size: 13px; }
 
-.app-btn--outline { background: transparent; color: #5c9126; border: 1px dashed rgba(92,145,38,0.22); }
-.app-btn--outline:hover { background: rgba(92,145,38,0.06); }
+.app-btn--fixed{ min-width: 120px; }
+.app-btn--disabled, .app-btn[disabled]{ opacity: .6; cursor: not-allowed; transform: none; }
 
-
-.app-btn--sm { padding: 6px 12px; font-size: 0.85rem; }
-.app-btn--md { 
-  padding: 12px 30px;
-  font-size: 0.95rem;
+/* utility shape used across the app to match primary rounded shape but keep color semantics */
+.app-btn--primary-shape{
+  border-radius: 12px;
+  padding-left: 16px;
+  padding-right: 16px;
 }
 
-.app-btn[disabled], .app-btn--disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-
-.app-btn--block { width: 100%; }
-
-.buttons-row .app-btn {
-  height: 48px;
-  min-width: 120px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-
-.app-btn--fixed {
-  min-width: 160px;
-  width: 160px;
-}
-
-@media (max-width: 576px) {
-   .app-btn--fixed {
-    width: 100%;
-    min-width: 0;
-  }
-}
+/* small helpers */
+.app-btn .spinner-border{ width: 16px; height: 16px; }

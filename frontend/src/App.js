@@ -108,6 +108,21 @@ function AppInner() {
   const showTopNav = location.pathname !== '/login';
   return (
     <div className="App">
+      {/* Estilos utilitários injetados no nível do App para manter padrões visuais comuns */}
+      <style>{`
+        /* Força tamanho e cantos iguais ao botão primário, mantendo a variante de cor (ex: secondary) */
+        .app-btn--primary-shape {
+          border-radius: 25px;
+          padding: 12px 30px;
+          font-weight: 700;
+          box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+          min-width: 160px;
+          width: 160px;
+        }
+        @media (max-width: 576px) {
+          .app-btn--primary-shape { width: 100%; min-width: 0; }
+        }
+      `}</style>
       <IosInstallHint />
       {showTopNav && <TopNav />}
       <Routes>

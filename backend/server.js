@@ -37,7 +37,12 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Iniciar worker responsável por notificações agendadas (apenas em produção)
-startScheduledNotificationsWorker();
+// Permitir desativar o worker via variável de ambiente para debugging/depuração.
+if (process.env.DISABLE_SCHEDULED_WORKER === 'true') {
+  console.log('Scheduled notifications worker is disabled via DISABLE_SCHEDULED_WORKER');
+} else {
+  startScheduledNotificationsWorker();
+}
 
 
 // CORS: permitir origem configurável e enviar credenciais (cookies)
@@ -62,12 +67,38 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(bodyParser.json());
 
+// Debug middleware: log incoming requests early so we can diagnose CORS/connection issues
+app.use((req, res, next) => {
+  try {
+    const origin = req.headers.origin || '<none>';
+    const bodyKeys = req.body && typeof req.body === 'object' ? Object.keys(req.body) : [];
+    const passwordPresent = bodyKeys.includes('password');
+    console.log(`INCOMING ${req.method} ${req.originalUrl} Origin:${origin} BodyKeys:${JSON.stringify(bodyKeys)} PasswordPresent:${passwordPresent}`);
+  } catch (e) {
+    // ignore logging errors
+  }
+  next();
+});
+
 const webpush = require('web-push');
 
 // As chaves VAPID devem ser fornecidas via variáveis de ambiente em produção.
 const publicVapidKey = process.env.PUBLIC_VAPID_KEY;
 const privateVapidKey = process.env.PRIVATE_VAPID_KEY;
-const vapidContact = process.env.VAPID_CONTACT || 'mailto:giulianerodrigues.ch297@academico.ifsul.edu.br';
+let vapidContact = process.env.VAPID_CONTACT || 'mailto:giulianerodrigues.ch297@academico.ifsul.edu.br';
+
+// Normalize VAPID contact: if it's an email without scheme, prefix with mailto:
+if (vapidContact && typeof vapidContact === 'string') {
+  // if it doesn't start with a scheme like mailto: or http://
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(vapidContact)) {
+    if (vapidContact.includes('@')) {
+      vapidContact = 'mailto:' + vapidContact;
+    } else {
+      // fallback: treat as mailto
+      vapidContact = 'mailto:' + vapidContact;
+    }
+  }
+}
 
 // Falhar rápido em produção quando segredos críticos estiverem ausentes
 if (process.env.NODE_ENV === 'production') {
@@ -82,9 +113,14 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 if (publicVapidKey && privateVapidKey) {
-  webpush.setVapidDetails(vapidContact, publicVapidKey, privateVapidKey);
+  try {
+    webpush.setVapidDetails(vapidContact, publicVapidKey, privateVapidKey);
+  } catch (err) {
+    console.warn('Failed to set VAPID details:', err && err.message ? err.message : err);
+    console.warn('Push notifications will be disabled for this run. Check VAPID_CONTACT and VAPID keys.');
+  }
 } else {
-  console.warn('VAPID keys not configured. Push notifications will not work until PUBLIC_VAPID_KEY and PRIVATE_VAPID_KEY are set.');
+  console.warn('VAPID keys not configured or running in development. Push notifications will not work until PUBLIC_VAPID_KEY and PRIVATE_VAPID_KEY are set.');
 }
 
 app.use(session({
@@ -104,6 +140,11 @@ app.use('/api/users', userRoutes);
 app.use('/api/events', eventoRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/admin', adminRoutes);
+
+// Quick health endpoint for local debugging (browser / fetch tests)
+app.get('/api/ping', (req, res) => {
+  res.json({ ok: true, time: new Date().toISOString() });
+});
 
 // Debug: log cada requisição breve com método e Origin para ajudar a diagnosticar CORS/OPTIONS
 app.use((req, res, next) => {

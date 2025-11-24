@@ -304,14 +304,12 @@ textarea:focus {
 .event-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(288px, 1fr));
-  grid-auto-rows: 132px; /* altura fixa dos blocos */
+  grid-auto-rows: minmax(120px, auto); /* permitir que blocos cresçam conforme conteúdo */
   gap: 15px; /* espaçamento uniforme entre os blocos */
   padding: 20px;
   box-sizing: border-box; /* inclui o padding e o border no cálculo da largura e altura */
-  overflow-y: auto; /* Permitir scroll vertical quando necessário */
-  overflow-x: hidden; /* Evitar scroll horizontal */
   width: 100%;
-  max-height: calc(100vh - 200px); /* Limitar altura para permitir scroll */
+  /* Removido scroll interno e limite de altura para que a página role normalmente */
 }
 
 /* Members page tweaks: ensure info column can shrink and actions are vertically centered */
@@ -360,7 +358,6 @@ textarea:focus {
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 10px;
     padding: 10px;
-    max-height: calc(100vh - 180px);
   }
   
   .container {
@@ -373,7 +370,6 @@ textarea:focus {
     grid-template-columns: 1fr; /* Uma coluna em telas muito pequenas */
     gap: 8px;
     padding: 8px;
-    max-height: calc(100vh - 160px);
   }
   
   .event-card {
