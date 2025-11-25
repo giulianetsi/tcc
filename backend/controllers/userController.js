@@ -227,8 +227,9 @@ const loginUser = async (req, res) => {
 
     const cookieOptions = {
       httpOnly: true,
+      // Em produção usamos secure + sameSite='none' para permitir cookies cross-site via HTTPS
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 60 * 60 * 1000
     };
 
