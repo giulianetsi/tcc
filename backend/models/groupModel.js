@@ -1,7 +1,7 @@
 const db = require('../db');
 
 // Cria um grupo e retorna o registro criado (incluindo member_count)
-async function createGroup({ name, description, group_type, parent_course_id, created_by }) {
+async function createGroup({ name, description, group_type, parent_course_id }) {
   if (!name) throw new Error('Nome do grupo requerido');
 
   // verificar existência da coluna parent_course_id
@@ -10,9 +10,9 @@ async function createGroup({ name, description, group_type, parent_course_id, cr
 
   let result;
   if (parentColExists) {
-    [result] = await db.execute('INSERT INTO `groups` (name, description, group_type, parent_course_id, created_by) VALUES (?, ?, ?, ?, ?)', [name, description || null, group_type || 'custom', parent_course_id || null, created_by || null]);
+    [result] = await db.execute('INSERT INTO `groups` (name, description, group_type, parent_course_id) VALUES (?, ?, ?, ?)', [name, description || null, group_type || 'custom', parent_course_id || null]);
   } else {
-    [result] = await db.execute('INSERT INTO `groups` (name, description, group_type, created_by) VALUES (?, ?, ?, ?)', [name, description || null, group_type || 'custom', created_by || null]);
+    [result] = await db.execute('INSERT INTO `groups` (name, description, group_type) VALUES (?, ?, ?)', [name, description || null, group_type || 'custom']);
   }
 
   const [rows] = await db.execute('SELECT g.*, (SELECT COUNT(*) FROM user_groups ug WHERE ug.group_id = g.id) AS member_count FROM `groups` g WHERE g.id = ? LIMIT 1', [result.insertId]);
@@ -25,15 +25,12 @@ async function listGroups() {
 
   if (parentColExists) {
     const [groups] = await db.execute(
-      `SELECT g.*, 
-        pc.name AS parent_course_name,
-        u.first_name AS created_by_name,
-        u.last_name AS created_by_lastname,
-        (SELECT COUNT(*) FROM user_groups ug WHERE ug.group_id = g.id) AS member_count
-      FROM \`groups\` g
-      LEFT JOIN \`groups\` pc ON pc.id = g.parent_course_id
-      LEFT JOIN users u ON u.id = g.created_by
-      ORDER BY g.name COLLATE utf8mb4_general_ci ASC`
+        `SELECT g.*, 
+          pc.name AS parent_course_name,
+          (SELECT COUNT(*) FROM user_groups ug WHERE ug.group_id = g.id) AS member_count
+        FROM \`groups\` g
+        LEFT JOIN \`groups\` pc ON pc.id = g.parent_course_id
+        ORDER BY g.name COLLATE utf8mb4_general_ci ASC`
     );
     return groups;
   }

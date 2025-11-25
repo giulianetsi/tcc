@@ -3,12 +3,11 @@ const groupModel = require('../models/groupModel');
 // Criar um novo grupo. Toda a lógica de BD delegada ao model.
 const createGroup = async (req, res) => {
   const { name, description, group_type, parent_course_id } = req.body;
-  const created_by = req.user?.userId;
 
   if (!name) return res.status(400).json({ message: 'Nome do grupo requerido' });
 
   try {
-    const { groupId, group } = await groupModel.createGroup({ name, description, group_type, parent_course_id, created_by });
+    const { groupId, group } = await groupModel.createGroup({ name, description, group_type, parent_course_id });
     res.status(201).json({ message: 'Grupo criado', groupId, group });
   } catch (error) {
     console.error('Erro ao criar grupo:', error && error.message);
