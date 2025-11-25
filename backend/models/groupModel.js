@@ -15,6 +15,10 @@ async function createGroup({ name, description, group_type, parent_course_id }) 
     [result] = await db.execute('INSERT INTO `groups` (name, description, group_type) VALUES (?, ?, ?)', [name, description || null, group_type || 'custom']);
   }
 
+  try {
+    console.log('groupModel.createGroup: insertedId=', result && result.insertId);
+  } catch (e) {}
+
   const [rows] = await db.execute('SELECT g.*, (SELECT COUNT(*) FROM user_groups ug WHERE ug.group_id = g.id) AS member_count FROM `groups` g WHERE g.id = ? LIMIT 1', [result.insertId]);
   return { groupId: result.insertId, group: (rows && rows[0]) ? rows[0] : null };
 }
@@ -32,6 +36,10 @@ async function listGroups() {
         LEFT JOIN \`groups\` pc ON pc.id = g.parent_course_id
         ORDER BY g.name COLLATE utf8mb4_general_ci ASC`
     );
+    try {
+      console.log('groupModel.listGroups: parentColExists=true rows=', Array.isArray(groups) ? groups.length : 0);
+      if (Array.isArray(groups) && groups.length > 0) console.log('groupModel.listGroups sample:', groups.slice(0,5).map(g => `${g.id}:${g.name}`));
+    } catch (e) {}
     return groups;
   }
 
@@ -41,6 +49,10 @@ async function listGroups() {
     FROM \`groups\` g
     ORDER BY g.name COLLATE utf8mb4_general_ci ASC`
   );
+  try {
+    console.log('groupModel.listGroups: parentColExists=false rows=', Array.isArray(groups) ? groups.length : 0);
+    if (Array.isArray(groups) && groups.length > 0) console.log('groupModel.listGroups sample:', groups.slice(0,5).map(g => `${g.id}:${g.name}`));
+  } catch (e) {}
   return groups;
 }
 
