@@ -174,8 +174,8 @@ async function createUser(data) {
   }
   if (!user_type_id) { const err = new Error('Tipo de usuário inválido'); err.code = 'INVALID_USER_TYPE'; throw err; }
 
-  const query = 'INSERT INTO users (first_name, last_name, email, phone, birth_date, password, cpf, user_type_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
-  const params = [first_name, last_name, email, phone, birth_date, hashedPassword, cpf, user_type_id, createdBy || null];
+  const query = 'INSERT INTO users (first_name, last_name, email, phone, birth_date, password, cpf, user_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+  const params = [first_name, last_name, email, phone, birth_date, hashedPassword, cpf, user_type_id];
 
   const [result] = await db.execute(query, params);
   const userId = result.insertId;
