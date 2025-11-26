@@ -85,8 +85,7 @@ async function getEventosForUser(reqUser) {
       LEFT JOIN event_groups eg ON e.id = eg.event_id
       LEFT JOIN \`groups\` g ON eg.group_id = g.id
       WHERE (
-        (e.target_user_types IS NULL OR (${containsClauses}))
-        AND (
+        (
           (e.groups_combined = 0 
            AND (
              NOT EXISTS (
@@ -202,10 +201,6 @@ async function getEventosForUser(reqUser) {
     throw queryErr;
   }
 }
-
-module.exports = {
-  getEventosForUser
-};
 
 /**
  * Cria um evento com dados fornecidos e opcionalmente associa grupos e agenda/ envia notificações.
@@ -576,24 +571,8 @@ async function updateEvent(eventId, data, reqUser) {
   return { message: 'Evento atualizado com sucesso' };
 }
 
-/**
- * Deleta evento verificando permissões
- */
-async function deleteEvent(eventId, reqUser) {
-  const [rows] = await db.execute('SELECT user_id FROM events WHERE id = ?', [eventId]);
-  if (!rows || rows.length === 0) throw Object.assign(new Error('Evento não encontrado'), { status: 404 });
-  const ownerId = rows[0].user_id;
-  const userId = reqUser?.userId;
-  const isAdmin = Boolean(reqUser?.permissions && (reqUser.permissions.canViewAllEvents || reqUser.permissions.can_create_user || reqUser.permissions.canCreateUser)) || reqUser?.userTypeId === 1 || String(reqUser?.userType).toLowerCase() === 'admin';
-  if (Number(ownerId) !== Number(userId) && !isAdmin) throw Object.assign(new Error('Apenas o criador ou administrador pode deletar este evento'), { status: 403 });
-
-  await db.execute('DELETE FROM event_groups WHERE event_id = ?', [eventId]);
-  await db.execute('DELETE FROM events WHERE id = ?', [eventId]);
-  return { message: 'Evento removido' };
-}
-
-module.exports = Object.assign(module.exports, {
+module.exports = {
+  getEventosForUser,
   createEvent,
-  updateEvent,
-  deleteEvent
-});
+  updateEvent
+};
