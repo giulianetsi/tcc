@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 
@@ -15,6 +15,8 @@ const GroupMembers = () => {
   // Rastrear alterações pendentes localmente
   const [toAdd, setToAdd] = useState(new Set());
   const [toRemove, setToRemove] = useState(new Set());
+  // Guardar temporariamente objetos de usuário marcados para adicionar
+  const pendingAddedRef = useRef(new Map());
   const [membersQuery, setMembersQuery] = useState('');
   const [availableQuery, setAvailableQuery] = useState('');
 
@@ -73,8 +75,18 @@ const GroupMembers = () => {
 
   const markAdd = (userId) => {
     setToAdd(prev => new Set(prev).add(userId));
-  // UI otimista: remover da lista de disponíveis
-    setAvailable(prev => (Array.isArray(prev) ? prev.filter(u => u.id !== userId) : []));
+    // remover da lista de disponíveis e adicionar imediatamente aos membros
+    setAvailable(prev => {
+      if (!Array.isArray(prev)) return [];
+      const userObj = prev.find(u => Number(u.id) === Number(userId));
+      const next = prev.filter(u => Number(u.id) !== Number(userId));
+      if (userObj) {
+        // guardar para possível desfazer antes do save
+        pendingAddedRef.current.set(Number(userId), userObj);
+        setMembers(curr => [userObj, ...curr]);
+      }
+      return next;
+    });
   };
 
   const unmarkAdd = (userId) => {
@@ -83,7 +95,15 @@ const GroupMembers = () => {
       s.delete(userId);
       return s;
     });
-  // restaurar para disponíveis por re-fetch se necessário; abordagem simples: no-op
+    // Restaurar a lista de disponíveis se tivermos o objeto em pendingAddedRef
+    const stored = pendingAddedRef.current.get(Number(userId));
+    if (stored) {
+      setMembers(prev => prev.filter(m => Number(m.id) !== Number(userId)));
+      setAvailable(prev => [stored, ...(Array.isArray(prev) ? prev : [])]);
+      pendingAddedRef.current.delete(Number(userId));
+      return;
+    }
+    // fallback: recarregar dados do servidor
     fetchData();
   };
 
