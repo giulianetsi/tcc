@@ -292,6 +292,8 @@ async function createEvent(data, reqUser) {
     const sendNotificationMode = data.sendNotificationMode || data.send_notification_mode || 'scheduled';
     const scheduledNotificationDatetime = data.scheduledNotificationDatetime || data.scheduled_notification_datetime;
 
+    console.log('[eventModel] createEvent notification flags:', { sendNotification, sendNotificationMode, scheduledNotificationDatetime, event_datetime });
+
     if (sendNotification) {
       (async () => {
         const payload = JSON.stringify({ title: 'Novo evento', body: `Um novo evento foi criado: ${data.titulo || data.title}`, data: { eventoId } });
@@ -418,7 +420,7 @@ async function createEvent(data, reqUser) {
               }
             } catch (schedErr) { console.error('[eventModel] failed inserting scheduled_notifications', schedErr && schedErr.message ? schedErr.message : schedErr); }
           }
-        } catch (pushErr) { /* ignorar */ }
+        } catch (pushErr) { console.error('[eventModel] background notification task error', pushErr && pushErr.message ? pushErr.message : pushErr); }
       })();
     }
 
