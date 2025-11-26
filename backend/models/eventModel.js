@@ -39,7 +39,7 @@ async function getEventosForUser(reqUser) {
       }
     }
   } catch (guardErr) {
-    // swallow and continue with original user
+    // ignorar e continuar com o usuário original
   }
 
   let query;
@@ -132,7 +132,7 @@ async function getEventosForUser(reqUser) {
     return { events: result[0], effectiveUserId };
   } catch (queryErr) {
     if (queryErr && queryErr.code === 'ER_BAD_FIELD_ERROR' && /target_user_types/.test(queryErr.message)) {
-      // fallback: rebuild query without target_user_types
+      // fallback: reconstruir query sem target_user_types
       if (canViewAll) {
         query = `
           SELECT DISTINCT e.*, 
@@ -249,7 +249,7 @@ async function createEvent(data, reqUser) {
 
     // target_user_types
     const target_user_types = data.target_user_types || data.targetUserTypes;
-    if (target_user_types && Array.isArray(target_user_types)) {
+      if (target_user_types && Array.isArray(target_user_types)) {
       try {
         await connection.execute('UPDATE events SET target_user_types = ? WHERE id = ?', [JSON.stringify(target_user_types), eventoId]);
       } catch (updateError) {
@@ -292,15 +292,41 @@ async function createEvent(data, reqUser) {
             }
           } else {
             let scheduledAt = null;
-            if (scheduledNotificationDatetime) scheduledAt = String(scheduledNotificationDatetime).replace('T',' ');
-            else if (event_datetime && containsTime(event_datetime)) scheduledAt = String(event_datetime).replace('T',' ');
-            else if (data.data_period_start) scheduledAt = `${data.data_period_start} ${DEFAULT_NOTIFICATION_TIME}`;
-            else scheduledAt = new Date().toISOString().slice(0,19).replace('T',' ');
+            const toLocalSqlDatetime = (input) => {
+              try {
+                // Se a entrada já aparenta ser um datetime com 'T' ou espaço, tentar parsear
+                const s = String(input);
+                // Criar Date a partir da string — Node interpreta 'YYYY-MM-DDTHH:MM' como horário local
+                const d = new Date(s);
+                if (isNaN(d.getTime())) return null;
+                const pad = (n) => (n < 10 ? '0' + n : '' + n);
+                // Formatar como YYYY-MM-DD HH:MM:SS no fuso/hora do servidor
+                return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+              } catch (e) {
+                return null;
+              }
+            };
+
+            if (scheduledNotificationDatetime) {
+              const parsed = toLocalSqlDatetime(scheduledNotificationDatetime);
+              if (parsed) scheduledAt = parsed;
+              else scheduledAt = String(scheduledNotificationDatetime).replace('T',' ');
+            } else if (event_datetime && containsTime(event_datetime)) {
+              const parsed = toLocalSqlDatetime(event_datetime);
+              if (parsed) scheduledAt = parsed;
+              else scheduledAt = String(event_datetime).replace('T',' ');
+            } else if (data.data_period_start) {
+              scheduledAt = `${data.data_period_start} ${DEFAULT_NOTIFICATION_TIME}`;
+            } else {
+              const now = new Date();
+              const pad = (n) => (n < 10 ? '0' + n : '' + n);
+              scheduledAt = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+            }
             try {
               await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventoId, payload, scheduledAt]);
-            } catch (schedErr) { /* ignore scheduling errors */ }
+            } catch (schedErr) { /* ignorar erros de agendamento */ }
           }
-        } catch (pushErr) { /* ignore */ }
+        } catch (pushErr) { /* ignorar */ }
       })();
     }
 
@@ -368,9 +394,28 @@ async function updateEvent(eventId, data, reqUser) {
           const containsTime = (s) => { if (!s) return false; return /T|\s+\d{2}:\d{2}|:\d{2}/.test(String(s)); };
           let scheduledAt = null;
           const event_datetime = data.data_horario_evento || data.event_datetime;
-          if (scheduledNotificationDatetime) scheduledAt = String(scheduledNotificationDatetime).replace('T',' ');
-          else if (event_datetime && containsTime(event_datetime)) scheduledAt = String(event_datetime).replace('T',' ');
-          else scheduledAt = new Date().toISOString().slice(0,19).replace('T',' ');
+          const toLocalSqlDatetime2 = (input) => {
+            try {
+              const s = String(input);
+              const d = new Date(s);
+              if (isNaN(d.getTime())) return null;
+              const pad = (n) => (n < 10 ? '0' + n : '' + n);
+              return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+            } catch (e) { return null; }
+          };
+          if (scheduledNotificationDatetime) {
+            const parsed = toLocalSqlDatetime2(scheduledNotificationDatetime);
+            if (parsed) scheduledAt = parsed;
+            else scheduledAt = String(scheduledNotificationDatetime).replace('T',' ');
+          } else if (event_datetime && containsTime(event_datetime)) {
+            const parsed = toLocalSqlDatetime2(event_datetime);
+            if (parsed) scheduledAt = parsed;
+            else scheduledAt = String(event_datetime).replace('T',' ');
+          } else {
+            const now = new Date();
+            const pad = (n) => (n < 10 ? '0' + n : '' + n);
+            scheduledAt = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+          }
           try { await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventId, payload, scheduledAt]); } catch (err) {}
         }
       } catch (err) { }
