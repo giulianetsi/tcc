@@ -16,8 +16,9 @@ function startScheduledNotificationsWorker() {
       // Reservar um lote de notificações pendentes para evitar
       // envios duplicados quando múltiplas instâncias/processos executarem o worker.
       // Marcamos elas com sent = 2 (em progresso) e depois as selecionamos para processar.
-      await db.execute("UPDATE scheduled_notifications SET sent = 2 WHERE sent = 0 AND scheduled_at <= NOW() LIMIT 50");
-      const [rows] = await db.execute(`SELECT id, event_id, payload, scheduled_at, attempts FROM scheduled_notifications WHERE sent = 2 AND scheduled_at <= NOW() LIMIT 50`);
+      // Reservar usando UTC para evitar diferenças entre host/DB timezones
+      await db.execute("UPDATE scheduled_notifications SET sent = 2 WHERE sent = 0 AND scheduled_at <= UTC_TIMESTAMP() LIMIT 50");
+      const [rows] = await db.execute(`SELECT id, event_id, payload, scheduled_at, attempts FROM scheduled_notifications WHERE sent = 2 AND scheduled_at <= UTC_TIMESTAMP() LIMIT 50`);
       if (!rows || rows.length === 0) return;
 
       // carregar assinaturas (excluir entradas com prefixo decision:)
@@ -54,8 +55,8 @@ function startScheduledNotificationsWorker() {
           }
         }
         // Atualizar contador de tentativas e marcar o status final: sent=1 (concluído) ou sent=0 (voltar para pendente)
-        try {
-          const nowSql = 'NOW()';
+          try {
+          const nowSql = 'UTC_TIMESTAMP()';
           if (successCount > 0) {
             await db.execute('UPDATE scheduled_notifications SET sent = 1, attempts = COALESCE(attempts,0) + 1, last_attempt_at = ' + nowSql + ' WHERE id = ?', [notif.id]);
             console.log(`[scheduledNotificationsWorker] marked notification ${notif.id} as sent (successes=${successCount}, failures=${failureCount})`);

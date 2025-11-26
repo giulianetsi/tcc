@@ -292,27 +292,26 @@ async function createEvent(data, reqUser) {
             }
           } else {
             let scheduledAt = null;
-            const toLocalSqlDatetime = (input) => {
+            const toUtcSqlDatetime = (input) => {
               try {
-                // Se a entrada já aparenta ser um datetime com 'T' ou espaço, tentar parsear
+                // Tenta parsear a entrada e retorna uma string YYYY-MM-DD HH:MM:SS em UTC
                 const s = String(input);
-                // Criar Date a partir da string — Node interpreta 'YYYY-MM-DDTHH:MM' como horário local
                 const d = new Date(s);
                 if (isNaN(d.getTime())) return null;
                 const pad = (n) => (n < 10 ? '0' + n : '' + n);
-                // Formatar como YYYY-MM-DD HH:MM:SS no fuso/hora do servidor
-                return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+                // Usar getters UTC para normalizar independentemente do fuso do servidor
+                return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
               } catch (e) {
                 return null;
               }
             };
 
             if (scheduledNotificationDatetime) {
-              const parsed = toLocalSqlDatetime(scheduledNotificationDatetime);
+              const parsed = toUtcSqlDatetime(scheduledNotificationDatetime);
               if (parsed) scheduledAt = parsed;
               else scheduledAt = String(scheduledNotificationDatetime).replace('T',' ');
             } else if (event_datetime && containsTime(event_datetime)) {
-              const parsed = toLocalSqlDatetime(event_datetime);
+              const parsed = toUtcSqlDatetime(event_datetime);
               if (parsed) scheduledAt = parsed;
               else scheduledAt = String(event_datetime).replace('T',' ');
             } else if (data.data_period_start) {
@@ -320,7 +319,8 @@ async function createEvent(data, reqUser) {
             } else {
               const now = new Date();
               const pad = (n) => (n < 10 ? '0' + n : '' + n);
-              scheduledAt = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+              // gerar timestamp em UTC por consistência com o worker
+              scheduledAt = `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
             }
             try {
               await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventoId, payload, scheduledAt]);
@@ -394,21 +394,21 @@ async function updateEvent(eventId, data, reqUser) {
           const containsTime = (s) => { if (!s) return false; return /T|\s+\d{2}:\d{2}|:\d{2}/.test(String(s)); };
           let scheduledAt = null;
           const event_datetime = data.data_horario_evento || data.event_datetime;
-          const toLocalSqlDatetime2 = (input) => {
+          const toUtcSqlDatetime2 = (input) => {
             try {
               const s = String(input);
               const d = new Date(s);
               if (isNaN(d.getTime())) return null;
               const pad = (n) => (n < 10 ? '0' + n : '' + n);
-              return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+              return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
             } catch (e) { return null; }
           };
           if (scheduledNotificationDatetime) {
-            const parsed = toLocalSqlDatetime2(scheduledNotificationDatetime);
+            const parsed = toUtcSqlDatetime2(scheduledNotificationDatetime);
             if (parsed) scheduledAt = parsed;
             else scheduledAt = String(scheduledNotificationDatetime).replace('T',' ');
           } else if (event_datetime && containsTime(event_datetime)) {
-            const parsed = toLocalSqlDatetime2(event_datetime);
+            const parsed = toUtcSqlDatetime2(event_datetime);
             if (parsed) scheduledAt = parsed;
             else scheduledAt = String(event_datetime).replace('T',' ');
           } else {
