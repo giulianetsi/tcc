@@ -226,3 +226,41 @@ module.exports.removeSubscription = removeSubscription;
 module.exports.listSubscriptions = listSubscriptions;
 module.exports.upsertNotificationDecision = upsertNotificationDecision;
 module.exports.createUser = createUser;
+
+// --- Helpers para a tabela revoked_tokens (acesso ao DB centralizado na camada model)
+async function revokeToken(jti, expiresAt, userId = null, reason = null) {
+  try {
+    // expiresAt esperado como string DATETIME do MySQL em UTC, ou null
+    await db.execute('INSERT IGNORE INTO revoked_tokens (jti, expires_at, revoked_at, reason) VALUES (?, ?, UTC_TIMESTAMP(), ?)', [jti, expiresAt, reason]);
+    return true;
+  } catch (err) {
+    console.warn('userModel.revokeToken: erro no DB', err && err.message ? err.message : err);
+    throw err;
+  }
+}
+
+async function isTokenRevoked(jti) {
+  try {
+    if (!jti) return false;
+    const [rows] = await db.execute('SELECT 1 FROM revoked_tokens WHERE jti = ? LIMIT 1', [jti]);
+    return !!(rows && rows.length > 0);
+  } catch (err) {
+    console.warn('userModel.isTokenRevoked: erro no DB', err && err.message ? err.message : err);
+    // se houver erro de DB, preferimos retornar false para não quebrar disponibilidade
+    return false;
+  }
+}
+
+async function cleanExpiredRevokedTokens() {
+  try {
+    await db.execute('DELETE FROM revoked_tokens WHERE expires_at < UTC_TIMESTAMP()');
+    return true;
+  } catch (err) {
+    console.warn('userModel.cleanExpiredRevokedTokens: erro no DB', err && err.message ? err.message : err);
+    return false;
+  }
+}
+
+module.exports.revokeToken = revokeToken;
+module.exports.isTokenRevoked = isTokenRevoked;
+module.exports.cleanExpiredRevokedTokens = cleanExpiredRevokedTokens;

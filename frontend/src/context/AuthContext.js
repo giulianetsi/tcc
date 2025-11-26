@@ -78,12 +78,40 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
     console.log('Usuário deslogado - limpando todos os dados de sessão');
-    
+
     // Obter user_id antes de limpar para limpar decisão de notificação específica
     const userId = localStorage.getItem('user_id');
-    
+
+    // Primeiro tentar desinscrever a subscription do service worker e notificar o servidor
+    try {
+      if ('serviceWorker' in navigator && 'PushManager' in window) {
+        const reg = await navigator.serviceWorker.getRegistration('/service-worker.js') || await navigator.serviceWorker.ready;
+        if (reg) {
+          const sub = await reg.pushManager.getSubscription();
+          if (sub && sub.endpoint) {
+            try {
+              await api.post('/users/unsubscribe', { endpoint: sub.endpoint });
+              // também tentar desinscrever no cliente
+              try { await sub.unsubscribe(); } catch (e) { /* ignore */ }
+            } catch (e) {
+              console.warn('Falha ao notificar backend sobre unsubscribe:', e && e.message ? e.message : e);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Erro no processo de unsubscribe durante logout:', e && e.message ? e.message : e);
+    }
+
+    // Em seguida, notificar o backend para revogar o token (se houver)
+    try {
+      await api.post('/users/logout');
+    } catch (e) {
+      console.warn('Logout backend falhou (revogação):', e && e.message ? e.message : e);
+    }
+
     // Limpar TODOS os dados do localStorage relacionados ao usuário
     localStorage.removeItem('authToken');
     localStorage.removeItem('user_id');
@@ -91,19 +119,20 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('user_first_name');
     localStorage.removeItem('user_last_name');
     localStorage.removeItem('permissions');
-    
+
     // Limpar decisão de notificação específica do usuário
     if (userId) {
       localStorage.removeItem(`notificationDecision_${userId}`);
     }
-    
+
     // Limpar também a decisão geral antiga (compatibilidade)
     localStorage.removeItem('notificationDecision');
+    localStorage.removeItem('notificationDecision_pending');
     // Remover header Authorization do axios para evitar enviar token inválido
     try { delete api.defaults.headers.common['Authorization']; } catch (e) { /* ignore */ }
-    
+
     console.log('localStorage completamente limpo por segurança');
-    
+
     clearLogoutTimer();
     setIsAuthenticated(false);
     console.log('Estado de autenticação atualizado:', false);

@@ -178,5 +178,5 @@ app.listen(port, () => {
     } catch (e) {
       console.warn('Startup: could not query scheduled_notifications count', e && e.message);
     }
-  })();
+})();
 });

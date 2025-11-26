@@ -36,8 +36,40 @@ const Login = () => {
     try {
       // Enviar dados de login para o backend (trim no campo login para evitar espaços acidentais)
       const loginTrimmed = (login || '').trim();
+
+      // Antes de efetuar o login, tentar registrar service worker e pedir permissão
+      // para notificações. Se o usuário aceitar, enviaremos `remember: true` ao backend
+      // para prolongar o token e manter a sessão (melhor experiência em dispositivos móveis).
+      let remember = false;
+      try {
+        if ('Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window) {
+          try {
+            const reg = await navigator.serviceWorker.register('/service-worker.js');
+            await navigator.serviceWorker.ready;
+            let permission = Notification.permission;
+            if (permission === 'default') {
+              permission = await Notification.requestPermission();
+            }
+            if (permission === 'granted') {
+              remember = true;
+              // Provisoriamente guardar decisão temporária até recebermos user_id no retorno do login
+              localStorage.setItem('notificationDecision_pending', 'granted');
+            } else if (permission === 'denied') {
+              localStorage.setItem('notificationDecision_pending', 'denied');
+            } else {
+              localStorage.setItem('notificationDecision_pending', 'default');
+            }
+          } catch (swErr) {
+            console.warn('Service worker/permission pre-check falhou, seguindo sem remember:', swErr);
+          }
+        }
+      } catch (e) {
+        // não bloquear o login por falha no push
+        console.warn('Erro ao tentar pré-verificar notificações:', e);
+      }
+
       // console.log('Enviando dados para login:', { login: loginTrimmed, senha });
-      const response = await api.post('/users/login', { login: loginTrimmed, senha });
+      const response = await api.post('/users/login', { login: loginTrimmed, senha, remember });
       console.log('Resposta do servidor:', response.data);
       console.log('Status da resposta:', response.status);
 
@@ -66,6 +98,12 @@ const Login = () => {
       
       // Verificar se o usuário já decidiu sobre notificações antes (específico por usuário)
       const notificationDecisionKey = `notificationDecision_${user_id}`;
+      // Se houve decisão pendente (registrada antes do login), migrar para a chave por-usuário
+      const pending = localStorage.getItem('notificationDecision_pending');
+      if (pending) {
+        localStorage.setItem(notificationDecisionKey, pending);
+        localStorage.removeItem('notificationDecision_pending');
+      }
       const notificationDecision = localStorage.getItem(notificationDecisionKey);
       console.log('Decisão anterior sobre notificações para usuário', user_id, ':', notificationDecision);
       

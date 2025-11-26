@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
+const userModel = require('../models/userModel');
 
-const authenticateToken = (req, res, next) => {
+const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = (authHeader && authHeader.split(' ')[1]) || (req.cookies && req.cookies.token);
 
@@ -11,12 +12,27 @@ const authenticateToken = (req, res, next) => {
   try {
     const jwtSecret = process.env.JWT_SECRET || 'your_jwt_secret';
     const decoded = jwt.verify(token, jwtSecret);
+
+    // Checar se o jti foi revogado via model
+    try {
+      if (decoded && decoded.jti) {
+        const revoked = await userModel.isTokenRevoked(decoded.jti);
+        if (revoked) {
+          console.warn('authenticateToken: token revogado jti=', decoded.jti);
+          return res.status(403).json({ message: 'Token inválido (revogado)' });
+        }
+      }
+    } catch (dbErr) {
+      // se falhar a checagem, não negar acesso por segurança de disponibilidade — logamos
+      console.warn('authenticateToken: falha ao checar revoked_tokens via model:', dbErr && dbErr.message ? dbErr.message : dbErr);
+    }
+
     req.user = decoded;
     // Logar informações mínimas do token decodificado (evitar imprimir segredos)
     console.log('authenticateToken: usuário decodificado do token:', { userId: decoded.userId, userTypeId: decoded.userTypeId, userType: decoded.userType });
     next();
   } catch (error) {
-    console.warn('authenticateToken: verificação do token falhou:', error.message);
+    console.warn('authenticateToken: verificação do token falhou:', error && error.message ? error.message : error);
     return res.status(403).json({ message: 'Token inválido' });
   }
 };

@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const webpush = require('web-push');
 const userModel = require('../models/userModel');
+const crypto = require('crypto');
 
 // Registrar subscription do navegador (salvar endpoint + chaves no DB)
 const subscribe = async (req, res) => {
@@ -205,7 +206,7 @@ const registerUser = async (req, res) => {
 };
 
 const loginUser = async (req, res) => {
-  const { login, senha } = req.body;
+  const { login, senha, remember } = req.body;
 
   if (!senha) {
     return res.status(400).json({ message: 'Senha não fornecida' });
@@ -223,14 +224,17 @@ const loginUser = async (req, res) => {
     };
 
     const jwtSecret = process.env.JWT_SECRET || 'your_jwt_secret';
-    const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn: '1h' });
+    // Gerar um jti para permitir revogação de tokens por dispositivo
+    const jti = crypto.randomBytes(16).toString('hex');
+    const expiresIn = remember ? '30d' : '1h';
+    const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn, jwtid: jti });
 
     const cookieOptions = {
       httpOnly: true,
       // Em produção usamos secure + sameSite='none' para permitir cookies cross-site via HTTPS
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      maxAge: 60 * 60 * 1000
+      maxAge: remember ? (30 * 24 * 60 * 60 * 1000) : (60 * 60 * 1000)
     };
 
     res.cookie('token', token, cookieOptions);
@@ -250,7 +254,41 @@ const loginUser = async (req, res) => {
   }
 };
 
-const logoutUser = (req, res) => {
+const logoutUser = async (req, res) => {
+  // Tentar identificar o token (Authorization header ou cookie) e gravar seu jti em revoked_tokens
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = (authHeader && authHeader.split(' ')[1]) || (req.cookies && req.cookies.token);
+    if (token) {
+      try {
+        const jwtSecret = process.env.JWT_SECRET || 'your_jwt_secret';
+        const decoded = jwt.verify(token, jwtSecret);
+        const jti = decoded.jti || null;
+        if (jti && decoded.exp) {
+          const expiresAt = new Date(decoded.exp * 1000).toISOString().slice(0, 19).replace('T', ' ');
+          try {
+            await userModel.revokeToken(jti, expiresAt, decoded.userId || null);
+          } catch (e) {
+            console.warn('Could not revoke token via model:', e && e.message ? e.message : e);
+          }
+        }
+      } catch (verifyErr) {
+        // token inválido, apenas continuar
+        console.warn('logoutUser: token verify failed:', verifyErr && verifyErr.message ? verifyErr.message : verifyErr);
+      }
+    }
+  } catch (err) {
+    console.warn('logoutUser: unexpected error when trying to revoke token:', err && err.message ? err.message : err);
+  }
+
+  // se for enviado endpoint no corpo, remover subscription relacionada
+  try {
+    const { endpoint } = req.body || {};
+    if (endpoint) {
+      try { await userModel.removeSubscription(endpoint); } catch (e) { /* ignore */ }
+    }
+  } catch (e) { /* ignore */ }
+
   res.clearCookie('token');
   res.status(200).json({ message: 'Logout bem-sucedido' });
 };
