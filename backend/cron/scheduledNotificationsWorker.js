@@ -33,6 +33,15 @@ async function processDue() {
 
     const [subscriptions] = await db.execute("SELECT * FROM subscriptions WHERE endpoint NOT LIKE 'decision:%'");
     console.log('[scheduledNotificationsWorker] subscriptions count:', subscriptions ? subscriptions.length : 0);
+    // Remover duplicatas de `subscriptions` por `endpoint` para evitar enviar múltiplos pushes para o mesmo destino
+    const uniqueMap = new Map();
+    if (subscriptions && subscriptions.length) {
+      for (const s of subscriptions) {
+        if (!uniqueMap.has(s.endpoint)) uniqueMap.set(s.endpoint, s);
+      }
+    }
+    const uniqueSubscriptions = Array.from(uniqueMap.values());
+    console.log('[scheduledNotificationsWorker] unique subscriptions count:', uniqueSubscriptions.length);
 
     for (const notif of rows) {
       const rawPayload = notif.payload;
@@ -46,7 +55,7 @@ async function processDue() {
       console.log('[scheduledNotificationsWorker] payload type for notif', notif.id, '=>', typeof payload, 'len=', (payload && payload.length) ? payload.length : 0);
       let successCount = 0;
       let failureCount = 0;
-      for (const sub of subscriptions) {
+      for (const sub of uniqueSubscriptions) {
         const pushSubscription = { endpoint: sub.endpoint, keys: { p256dh: sub.keys_p256dh, auth: sub.keys_auth } };
         try {
           await webpush.sendNotification(pushSubscription, payload);

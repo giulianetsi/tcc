@@ -132,13 +132,16 @@ self.addEventListener('push', function(event) {
       return;
     }
 
+    const tag = (data && data.data && data.data.eventoId) ? `event-${data.data.eventoId}` : 'event-generic';
     const options = {
       body: data.body,
       icon: '/ifsul-logo.png',
       badge: '/ifsul-logo.png',
       data: data,
       requireInteraction: false,
-      silent: false
+      silent: false,
+      tag: tag,
+      renotify: false
     };
 
     return self.registration.showNotification(data.title, options);
