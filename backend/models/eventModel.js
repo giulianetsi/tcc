@@ -1,6 +1,75 @@
 const db = require('../db');
 const webpush = require('web-push');
 
+// Converte um input (string ou Date) para uma string DATETIME em UTC adequada ao MySQL.
+// - Se a string já contiver um offset (ex: Z ou +02:00) usa o parser do JS.
+// - Se a string estiver no formato 'YYYY-MM-DD' ou 'YYYY-MM-DD HH:MM[:SS]' sem offset,
+//   tratamos como horário local: montamos um Date com os componentes locais e então
+//   retornamos a representação em UTC.
+function toUtcSqlDatetime(input) {
+  try {
+    if (!input && input !== 0) return null;
+    // Se já for Date
+    if (input instanceof Date) {
+      const d = input;
+      if (isNaN(d.getTime())) return null;
+      const pad = (n) => (n < 10 ? '0' + n : '' + n);
+      return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+    }
+    const s = String(input).trim();
+    // detecta se já possui informação de fuso/offset (Z ou ±HH:MM)
+    const hasOffset = /Z$|[+-]\d{2}:?\d{2}$/.test(s);
+    // formatos simples YYYY-MM-DD ou YYYY-MM-DD HH:MM[:SS]
+    const localDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(s);
+    const localDateTime = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/.test(s);
+    // formatos comuns com barra DD/MM/YYYY ou DD/MM/YYYY HH:MM[:SS]
+    const slashDateOnly = /^\d{2}\/\d{2}\/\d{4}$/.test(s);
+    const slashDateTime = /^\d{2}\/\d{2}\/\d{4}[ T]\d{2}:\d{2}(:\d{2})?$/.test(s);
+
+    let d;
+    if (hasOffset) {
+      // contém offset -> Date parser cuida corretamente
+      d = new Date(s);
+    } else if (localDateOnly || localDateTime) {
+      // construir Date usando componentes locais para evitar ambiguidade do parser
+      const parts = s.split(/[ T]/);
+      const dateParts = parts[0].split('-').map(Number);
+      const timeParts = (parts[1] || '00:00:00').split(':').map(Number);
+      const year = dateParts[0];
+      const month = (dateParts[1] || 1) - 1;
+      const day = dateParts[2] || 1;
+      const hour = timeParts[0] || 0;
+      const minute = timeParts[1] || 0;
+      const second = timeParts[2] || 0;
+      d = new Date(year, month, day, hour, minute, second); // cria no horário local
+    } else if (slashDateOnly || slashDateTime) {
+      // formato DD/MM/YYYY (opcional HH:MM:SS)
+      const parts = s.split(/[ T]/);
+      const dateParts = parts[0].split('/').map(Number);
+      const timeParts = (parts[1] || '00:00:00').split(':').map(Number);
+      const day = dateParts[0];
+      const month = (dateParts[1] || 1) - 1;
+      const year = dateParts[2] || 1970;
+      const hour = timeParts[0] || 0;
+      const minute = timeParts[1] || 0;
+      const second = timeParts[2] || 0;
+      d = new Date(year, month, day, hour, minute, second);
+    } else if (/^\d+$/.test(s)) {
+      // timestamp numérico (ms)
+      d = new Date(Number(s));
+    } else {
+      // fallback: tentar o parser padrão
+      d = new Date(s);
+    }
+
+    if (!d || isNaN(d.getTime())) return null;
+    const pad = (n) => (n < 10 ? '0' + n : '' + n);
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+  } catch (e) {
+    return null;
+  }
+}
+
 /**
  * Retorna linhas brutas de eventos visíveis para o usuário fornecido.
  * Recebe o objeto decodificado do token (req.user) ou um userId numérico.
@@ -314,77 +383,10 @@ async function createEvent(data, reqUser) {
             }
           } else {
             let scheduledAt = null;
-            // Converte um input (string ou Date) para uma string DATETIME em UTC adequada ao MySQL.
-            // - Se a string já contiver um offset (ex: Z ou +02:00) usa o parser do JS.
-            // - Se a string estiver no formato 'YYYY-MM-DD' ou 'YYYY-MM-DD HH:MM[:SS]' sem offset,
-            //   tratamos como horário local: montamos um Date com os componentes locais e então
-            //   retornamos a representação em UTC.
-            const toUtcSqlDatetime = (input) => {
-              try {
-                if (!input && input !== 0) return null;
-                // Se já for Date
-                if (input instanceof Date) {
-                  const d = input;
-                  if (isNaN(d.getTime())) return null;
-                  const pad = (n) => (n < 10 ? '0' + n : '' + n);
-                  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
-                }
-                const s = String(input).trim();
-                // detecta se já possui informação de fuso/offset (Z ou ±HH:MM)
-                const hasOffset = /Z$|[+-]\d{2}:?\d{2}$/.test(s);
-                // formatos simples YYYY-MM-DD ou YYYY-MM-DD HH:MM[:SS]
-                const localDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(s);
-                const localDateTime = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/.test(s);
-                // formatos comuns com barra DD/MM/YYYY ou DD/MM/YYYY HH:MM[:SS]
-                const slashDateOnly = /^\d{2}\/\d{2}\/\d{4}$/.test(s);
-                const slashDateTime = /^\d{2}\/\d{2}\/\d{4}[ T]\d{2}:\d{2}(:\d{2})?$/.test(s);
-
-                let d;
-                if (hasOffset) {
-                  // contém offset -> Date parser cuida corretamente
-                  d = new Date(s);
-                } else if (localDateOnly || localDateTime) {
-                  // construir Date usando componentes locais para evitar ambiguidade do parser
-                  const parts = s.split(/[ T]/);
-                  const dateParts = parts[0].split('-').map(Number);
-                  const timeParts = (parts[1] || '00:00:00').split(':').map(Number);
-                  const year = dateParts[0];
-                  const month = (dateParts[1] || 1) - 1;
-                  const day = dateParts[2] || 1;
-                  const hour = timeParts[0] || 0;
-                  const minute = timeParts[1] || 0;
-                  const second = timeParts[2] || 0;
-                  d = new Date(year, month, day, hour, minute, second); // cria no horário local
-                } else if (slashDateOnly || slashDateTime) {
-                  // formato DD/MM/YYYY (opcional HH:MM:SS)
-                  const parts = s.split(/[ T]/);
-                  const dateParts = parts[0].split('/').map(Number);
-                  const timeParts = (parts[1] || '00:00:00').split(':').map(Number);
-                  const day = dateParts[0];
-                  const month = (dateParts[1] || 1) - 1;
-                  const year = dateParts[2] || 1970;
-                  const hour = timeParts[0] || 0;
-                  const minute = timeParts[1] || 0;
-                  const second = timeParts[2] || 0;
-                  d = new Date(year, month, day, hour, minute, second);
-                } else if (/^\d+$/.test(s)) {
-                  // timestamp numérico (ms)
-                  d = new Date(Number(s));
-                } else {
-                  // fallback: tentar o parser padrão
-                  d = new Date(s);
-                }
-
-                if (!d || isNaN(d.getTime())) return null;
-                const pad = (n) => (n < 10 ? '0' + n : '' + n);
-                return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
-              } catch (e) {
-                return null;
-              }
-            };
+            // toUtcSqlDatetime is defined at module scope and reused by update/create flows
 
             // Antes de inserir, registrar os inputs brutos para diagnóstico (ajuda a entender falhas)
-            console.log('[eventModel] scheduling inputs:', { eventoId, scheduledNotificationDatetime, event_datetime, data_period_start });
+            console.log('[eventModel] scheduling inputs:', { eventoId, scheduledNotificationDatetime, event_datetime, data_period_start: data.data_period_start, data_period_end: data.data_period_end });
 
             if (scheduledNotificationDatetime) {
               const parsed = toUtcSqlDatetime(scheduledNotificationDatetime);
