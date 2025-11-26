@@ -338,6 +338,9 @@ async function createEvent(data, reqUser) {
                 // formatos simples YYYY-MM-DD ou YYYY-MM-DD HH:MM[:SS]
                 const localDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(s);
                 const localDateTime = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/.test(s);
+                // formatos comuns com barra DD/MM/YYYY ou DD/MM/YYYY HH:MM[:SS]
+                const slashDateOnly = /^\d{2}\/\d{2}\/\d{4}$/.test(s);
+                const slashDateTime = /^\d{2}\/\d{2}\/\d{4}[ T]\d{2}:\d{2}(:\d{2})?$/.test(s);
 
                 let d;
                 if (hasOffset) {
@@ -355,6 +358,18 @@ async function createEvent(data, reqUser) {
                   const minute = timeParts[1] || 0;
                   const second = timeParts[2] || 0;
                   d = new Date(year, month, day, hour, minute, second); // cria no horário local
+                } else if (slashDateOnly || slashDateTime) {
+                  // formato DD/MM/YYYY (opcional HH:MM:SS)
+                  const parts = s.split(/[ T]/);
+                  const dateParts = parts[0].split('/').map(Number);
+                  const timeParts = (parts[1] || '00:00:00').split(':').map(Number);
+                  const day = dateParts[0];
+                  const month = (dateParts[1] || 1) - 1;
+                  const year = dateParts[2] || 1970;
+                  const hour = timeParts[0] || 0;
+                  const minute = timeParts[1] || 0;
+                  const second = timeParts[2] || 0;
+                  d = new Date(year, month, day, hour, minute, second);
                 } else if (/^\d+$/.test(s)) {
                   // timestamp numérico (ms)
                   d = new Date(Number(s));
@@ -370,6 +385,9 @@ async function createEvent(data, reqUser) {
                 return null;
               }
             };
+
+            // Antes de inserir, registrar os inputs brutos para diagnóstico (ajuda a entender falhas)
+            console.log('[eventModel] scheduling inputs:', { eventoId, scheduledNotificationDatetime, event_datetime, data_period_start });
 
             if (scheduledNotificationDatetime) {
               const parsed = toUtcSqlDatetime(scheduledNotificationDatetime);
@@ -397,8 +415,12 @@ async function createEvent(data, reqUser) {
               scheduledAt = `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
             }
             try {
-              console.log('[eventModel] scheduling notification:', { eventoId, scheduledAt, payloadLen: payload && payload.length });
-              await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventoId, payload, scheduledAt]);
+              if (!scheduledAt) {
+                console.warn('[eventModel] scheduledAt is null — parse failed, skipping scheduling for event', eventoId);
+              } else {
+                console.log('[eventModel] scheduling notification:', { eventoId, scheduledAt, payloadLen: payload && payload.length });
+                await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventoId, payload, scheduledAt]);
+              }
             } catch (schedErr) { console.error('[eventModel] failed inserting scheduled_notifications', schedErr && schedErr.message ? schedErr.message : schedErr); }
           }
         } catch (pushErr) { /* ignorar */ }
@@ -528,8 +550,24 @@ async function updateEvent(eventId, data, reqUser) {
           }
           try {
             console.log('[eventModel] scheduling notification (update):', { eventId, scheduledAt, payloadLen: payload && payload.length });
-            await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventId, payload, scheduledAt]);
-          } catch (err) { console.error('[eventModel] failed inserting scheduled_notifications (update)', err && err.message ? err.message : err); }
+            if (!scheduledAt) {
+              console.warn('[eventModel] scheduledAt is null for update — parse failed, skipping scheduling for event', eventId);
+            } else {
+              // Tentar atualizar qualquer agendamento pendente existente para este evento.
+              // Se não houver linhas afetadas, inserir um novo agendamento.
+              try {
+                const [updateRes] = await db.execute('UPDATE scheduled_notifications SET payload = ?, scheduled_at = ? WHERE event_id = ? AND sent = 0', [payload, scheduledAt, eventId]);
+                if (!updateRes || updateRes.affectedRows === 0) {
+                  await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventId, payload, scheduledAt]);
+                } else {
+                  console.log('[eventModel] updated existing scheduled_notifications for event', eventId, 'affectedRows=', updateRes.affectedRows);
+                }
+              } catch (uErr) {
+                // Se update falhar por algum motivo, tentar inserir como fallback
+                try { await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventId, payload, scheduledAt]); } catch (insErr) { throw insErr; }
+              }
+            }
+          } catch (err) { console.error('[eventModel] failed inserting/updating scheduled_notifications (update)', err && err.message ? err.message : err); }
         }
       } catch (err) { }
     })();
