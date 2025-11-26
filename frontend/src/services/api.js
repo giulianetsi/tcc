@@ -29,6 +29,11 @@ api.interceptors.request.use((cfg) => {
 // se token expired / unauthorized (401) -> limpar e ir pro login
 api.interceptors.response.use((res) => res, (error) => {
   const status = error && error.response && error.response.status;
+  const reqUrl = error && error.config && (error.config.url || error.config.baseURL || '');
+  // Não forçar redirect para o endpoint de login — deixar o componente Login tratar o erro
+  if (reqUrl && String(reqUrl).includes('/users/login')) {
+    return Promise.reject(error);
+  }
   if (status === 401) {
     try {
       // limpar localStorage

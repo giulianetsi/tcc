@@ -14,6 +14,7 @@ const Login = () => {
   const [login, setLogin] = useState('');
   const [senha, setSenha] = useState('');
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState(''); // 'success' | 'error' | ''
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
   const { login: authenticate, isAuthenticated } = useAuth();
@@ -28,6 +29,9 @@ const Login = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    // limpar mensagens anteriores
+    setMessage('');
+    setMessageType('');
 
     try {
       // Enviar dados de login para o backend
@@ -207,12 +211,15 @@ const Login = () => {
         console.error('Status do erro:', error.response.status);
         console.error('Dados do erro:', error.response.data);
         setMessage(error.response.data.message || 'Erro no servidor');
+        setMessageType('error');
       } else if (error.request) {
         console.error('Erro de conexão:', error.request);
         setMessage('Erro de conexão com o servidor');
+        setMessageType('error');
       } else {
         console.error('Erro desconhecido:', error.message);
         setMessage(error.message || 'Erro desconhecido');
+        setMessageType('error');
       }
     }
   };
@@ -291,7 +298,12 @@ const Login = () => {
                   <button type="submit" className="btn btn-custom-primary">Acessar</button>
                 </div>
               </form>
-              {message && <p className="mt-3 text-center text-danger">{message}</p>}
+              {message && (
+                <div className={`alert ${messageType === 'success' ? 'alert-success' : 'alert-danger'}`} role="alert" style={{ borderRadius: '8px', marginTop: '12px' }}>
+                  <button type="button" className="btn-close" aria-label="Close" style={{ position: 'absolute', right: '8px', top: '8px' }} onClick={() => { setMessage(''); setMessageType(''); }}></button>
+                  <div style={{ paddingRight: '28px' }}>{message}</div>
+                </div>
+              )}
             </div>
           </div>
 
