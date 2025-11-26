@@ -317,11 +317,53 @@ async function createEvent(data, reqUser) {
             }
           } else {
             let scheduledAt = null;
+            // Converte um input (string ou Date) para uma string DATETIME em UTC adequada ao MySQL.
+            // - Se a string já contiver um offset (ex: Z ou +02:00) usa o parser do JS.
+            // - Se a string estiver no formato 'YYYY-MM-DD' ou 'YYYY-MM-DD HH:MM[:SS]' sem offset,
+            //   tratamos como horário local: montamos um Date com os componentes locais e então
+            //   retornamos a representação em UTC.
             const toUtcSqlDatetime = (input) => {
               try {
-                const s = String(input);
-                const d = new Date(s);
-                if (isNaN(d.getTime())) return null;
+                if (!input && input !== 0) return null;
+                // Se já for Date
+                if (input instanceof Date) {
+                  const d = input;
+                  if (isNaN(d.getTime())) return null;
+                  const pad = (n) => (n < 10 ? '0' + n : '' + n);
+                  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+                }
+                const s = String(input).trim();
+                // detecta se já possui informação de fuso/offset (Z ou ±HH:MM)
+                const hasOffset = /Z$|[+-]\d{2}:?\d{2}$/.test(s);
+                // formatos simples YYYY-MM-DD ou YYYY-MM-DD HH:MM[:SS]
+                const localDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(s);
+                const localDateTime = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/.test(s);
+
+                let d;
+                if (hasOffset) {
+                  // contém offset -> Date parser cuida corretamente
+                  d = new Date(s);
+                } else if (localDateOnly || localDateTime) {
+                  // construir Date usando componentes locais para evitar ambiguidade do parser
+                  const parts = s.split(/[ T]/);
+                  const dateParts = parts[0].split('-').map(Number);
+                  const timeParts = (parts[1] || '00:00:00').split(':').map(Number);
+                  const year = dateParts[0];
+                  const month = (dateParts[1] || 1) - 1;
+                  const day = dateParts[2] || 1;
+                  const hour = timeParts[0] || 0;
+                  const minute = timeParts[1] || 0;
+                  const second = timeParts[2] || 0;
+                  d = new Date(year, month, day, hour, minute, second); // cria no horário local
+                } else if (/^\d+$/.test(s)) {
+                  // timestamp numérico (ms)
+                  d = new Date(Number(s));
+                } else {
+                  // fallback: tentar o parser padrão
+                  d = new Date(s);
+                }
+
+                if (!d || isNaN(d.getTime())) return null;
                 const pad = (n) => (n < 10 ? '0' + n : '' + n);
                 return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
               } catch (e) {
@@ -457,15 +499,8 @@ async function updateEvent(eventId, data, reqUser) {
           const containsTime = (s) => { if (!s) return false; return /T|\s+\d{2}:\d{2}|:\d{2}/.test(String(s)); };
           let scheduledAt = null;
           const event_datetime = data.data_horario_evento || data.event_datetime;
-          const toUtcSqlDatetime2 = (input) => {
-            try {
-              const s = String(input);
-              const d = new Date(s);
-              if (isNaN(d.getTime())) return null;
-              const pad = (n) => (n < 10 ? '0' + n : '' + n);
-              return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
-            } catch (e) { return null; }
-          };
+          // Versão reutilizável da função de conversão com o mesmo comportamento robusto
+          const toUtcSqlDatetime2 = toUtcSqlDatetime;
           if (scheduledNotificationDatetime) {
             const parsed = toUtcSqlDatetime2(scheduledNotificationDatetime);
             if (parsed) scheduledAt = parsed;
