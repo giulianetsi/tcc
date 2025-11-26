@@ -61,9 +61,24 @@ const triggerScheduledNotifications = async (req, res) => {
   }
 };
 
+// Endpoint de debug para retornar horário do servidor e TZ do Node
+const debugTime = async (req, res) => {
+  try {
+    res.status(200).json({
+      serverTime: new Date().toString(),
+      serverTimeISO: new Date().toISOString(),
+      nodeTZ: process.env.TZ || null
+    });
+  } catch (error) {
+    console.error('Erro debugTime:', error && error.message);
+    res.status(500).json({ message: 'Erro ao obter horário do servidor' });
+  }
+};
+
 module.exports = {
   listPermissions,
   updatePermissions,
   listScheduledNotifications
   , triggerScheduledNotifications
+  , debugTime
 };
