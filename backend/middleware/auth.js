@@ -11,16 +11,27 @@ const authenticateToken = async (req, res, next) => {
 
   try {
     const jwtSecret = process.env.JWT_SECRET || 'your_jwt_secret';
-    const decoded = jwt.verify(token, jwtSecret);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, jwtSecret);
+    } catch (verifyErr) {
+      console.warn('authenticateToken: falha ao verificar JWT:', verifyErr && verifyErr.message ? verifyErr.message : verifyErr);
+      // Repropagar para o handler externo abaixo que retornará 403
+      throw verifyErr;
+    }
 
     // Checar se o jti foi revogado via model
     try {
       if (decoded && decoded.jti) {
+        console.log('authenticateToken: token verificado, jti=', decoded.jti, 'userId=', decoded.userId);
         const revoked = await userModel.isTokenRevoked(decoded.jti);
+        console.log('authenticateToken: isTokenRevoked=', revoked, 'for jti=', decoded.jti);
         if (revoked) {
           console.warn('authenticateToken: token revogado jti=', decoded.jti);
           return res.status(403).json({ message: 'Token inválido (revogado)' });
         }
+      } else {
+        console.log('authenticateToken: token verificado, sem jti presente (decoded keys):', Object.keys(decoded || {}));
       }
     } catch (dbErr) {
       // se falhar a checagem, não negar acesso por segurança de disponibilidade — logamos

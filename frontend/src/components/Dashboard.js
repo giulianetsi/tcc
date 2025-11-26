@@ -144,11 +144,13 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
       }
     } catch (error) {
       console.error('Erro ao carregar eventos:', error);
-      if (error.response?.status === 401) {
-        logout();
-        navigate('/login');
+      const status = error.response?.status;
+      // Se não autorizado ou proibido -> limpar sessão e redirecionar para login
+      if (status === 401 || status === 403) {
+        try { logout(); } catch (e) {}
+        try { navigate('/login'); } catch (e) {}
       } else {
-  setEventos([]); // Retorno padrão para array vazio
+        setEventos([]); // Retorno padrão para array vazio
       }
     } finally {
       setLoading(false);

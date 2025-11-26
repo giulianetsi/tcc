@@ -228,6 +228,7 @@ const loginUser = async (req, res) => {
     const jti = crypto.randomBytes(16).toString('hex');
     const expiresIn = remember ? '30d' : '1h';
     const token = jwt.sign(tokenPayload, jwtSecret, { expiresIn, jwtid: jti });
+    console.log('loginUser: issuing token', { userId: user.id, jti, expiresIn });
 
     const cookieOptions = {
       httpOnly: true,

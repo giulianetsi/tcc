@@ -34,7 +34,8 @@ api.interceptors.response.use((res) => res, (error) => {
   if (reqUrl && String(reqUrl).includes('/users/login')) {
     return Promise.reject(error);
   }
-  if (status === 401) {
+  // Tratar 401 (Unauthorized) e 403 (Forbidden) da mesma forma: limpar sessão e redirecionar ao login
+  if (status === 401 || status === 403) {
     try {
       // limpar localStorage
       const userId = localStorage.getItem('user_id');

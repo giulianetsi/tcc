@@ -93,6 +93,18 @@ const Login = () => {
       // passar token para que o contexto agende logout automático pelo exp
       authenticate(token);
 
+      // DEBUG: log payload do token para ajudar no diagnóstico de exp/jti
+      try {
+        const parts = token.split('.');
+        if (parts.length >= 2) {
+          const raw = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+          const json = JSON.parse(decodeURIComponent(escape(window.atob(raw))));
+          console.log('DEBUG token payload:', json);
+        }
+      } catch (e) {
+        console.warn('DEBUG: não foi possível decodificar token no cliente', e);
+      }
+
       // Tentar registrar para notificações push (não crítico)
       console.log('Iniciando processo de notificações push...');
       
