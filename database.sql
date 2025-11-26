@@ -488,13 +488,3 @@ CREATE TABLE scheduled_notifications (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
 );
-
-CREATE TABLE IF NOT EXISTS revoked_tokens (
-  jti VARCHAR(255) PRIMARY KEY,
-  expires_at DATETIME NOT NULL,
-  revoked_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  reason VARCHAR(255),
-  user_id BIGINT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_revoked_expires_at ON revoked_tokens (expires_at);

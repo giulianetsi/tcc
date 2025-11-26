@@ -30,12 +30,11 @@ api.interceptors.request.use((cfg) => {
 api.interceptors.response.use((res) => res, (error) => {
   const status = error && error.response && error.response.status;
   const reqUrl = error && error.config && (error.config.url || error.config.baseURL || '');
-  // Não forçar redirect para o endpoint de login — deixar o componente Login tratar o erro
+  // Não interceptar/forçar redirect para o endpoint de login — deixar o componente Login tratar o erro
   if (reqUrl && String(reqUrl).includes('/users/login')) {
     return Promise.reject(error);
   }
-  // Tratar 401 (Unauthorized) e 403 (Forbidden) da mesma forma: limpar sessão e redirecionar ao login
-  if (status === 401 || status === 403) {
+  if (status === 401) {
     try {
       // limpar localStorage
       const userId = localStorage.getItem('user_id');
