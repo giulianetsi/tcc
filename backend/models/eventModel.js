@@ -337,6 +337,12 @@ async function createEvent(data, reqUser) {
               const parsed = toUtcSqlDatetime(event_datetime);
               if (parsed) scheduledAt = parsed;
               else scheduledAt = String(event_datetime).replace('T',' ');
+            } else if (event_datetime) {
+              // Se veio apenas a data em event_datetime (sem hora), compor com DEFAULT_NOTIFICATION_TIME
+              const composedEv = `${event_datetime} ${DEFAULT_NOTIFICATION_TIME}`;
+              const parsedEv = toUtcSqlDatetime(composedEv);
+              if (parsedEv) scheduledAt = parsedEv;
+              else scheduledAt = composedEv;
             } else if (data.data_period_start) {
               // data_period_start contém apenas a data (YYYY-MM-DD). Converter para UTC
               const composed = `${data.data_period_start} ${DEFAULT_NOTIFICATION_TIME}`;
@@ -468,6 +474,12 @@ async function updateEvent(eventId, data, reqUser) {
             const parsed = toUtcSqlDatetime2(event_datetime);
             if (parsed) scheduledAt = parsed;
             else scheduledAt = String(event_datetime).replace('T',' ');
+          } else if (event_datetime) {
+            // Se veio apenas a data em event_datetime (sem hora), compor com DEFAULT_NOTIFICATION_TIME
+            const composedEvU = `${event_datetime} ${DEFAULT_NOTIFICATION_TIME}`;
+            const parsedEvU = toUtcSqlDatetime2(composedEvU);
+            if (parsedEvU) scheduledAt = parsedEvU;
+            else scheduledAt = composedEvU;
           } else if (data && data.data_period_start) {
             // Em updateEvent, se o usuário forneceu data_period_start, usar a data+hora padrão convertida para UTC
             const composed2 = `${data.data_period_start} ${DEFAULT_NOTIFICATION_TIME}`;
