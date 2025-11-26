@@ -231,7 +231,8 @@ module.exports.createUser = createUser;
 async function revokeToken(jti, expiresAt, userId = null, reason = null) {
   try {
     // expiresAt esperado como string DATETIME do MySQL em UTC, ou null
-    await db.execute('INSERT IGNORE INTO revoked_tokens (jti, expires_at, revoked_at, reason) VALUES (?, ?, UTC_TIMESTAMP(), ?)', [jti, expiresAt, reason]);
+    console.log('userModel.revokeToken: inserindo jti=', jti, 'userId=', userId, 'expiresAt=', expiresAt, 'reason=', reason);
+    await db.execute('INSERT IGNORE INTO revoked_tokens (jti, expires_at, revoked_at, reason, user_id) VALUES (?, ?, UTC_TIMESTAMP(), ?, ?)', [jti, expiresAt, reason, userId]);
     return true;
   } catch (err) {
     console.warn('userModel.revokeToken: erro no DB', err && err.message ? err.message : err);

@@ -80,6 +80,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     console.log('Usuário deslogado - limpando todos os dados de sessão');
+    console.trace('DEBUG stack trace: logout called from');
 
     // Obter user_id antes de limpar para limpar decisão de notificação específica
     const userId = localStorage.getItem('user_id');

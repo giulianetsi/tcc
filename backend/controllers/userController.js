@@ -256,6 +256,8 @@ const loginUser = async (req, res) => {
 };
 
 const logoutUser = async (req, res) => {
+  console.log('logoutUser: chamada recebida', { ip: req.ip, origin: req.headers.origin, userAgent: req.headers['user-agent'] });
+  console.log('logoutUser: body recebido:', req.body);
   // Tentar identificar o token (Authorization header ou cookie) e gravar seu jti em revoked_tokens
   try {
     const authHeader = req.headers['authorization'];
@@ -268,7 +270,8 @@ const logoutUser = async (req, res) => {
         if (jti && decoded.exp) {
           const expiresAt = new Date(decoded.exp * 1000).toISOString().slice(0, 19).replace('T', ' ');
           try {
-            await userModel.revokeToken(jti, expiresAt, decoded.userId || null);
+            console.log('logoutUser: revogando token jti=', jti, 'userId=', decoded.userId || null, 'exp=', expiresAt);
+            await userModel.revokeToken(jti, expiresAt, decoded.userId || null, 'logout');
           } catch (e) {
             console.warn('Could not revoke token via model:', e && e.message ? e.message : e);
           }
