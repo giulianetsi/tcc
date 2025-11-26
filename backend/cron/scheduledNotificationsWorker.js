@@ -13,10 +13,14 @@ function startScheduledNotificationsWorker() {
   cron.schedule('* * * * *', async () => {
     try {
       console.log('[scheduledNotificationsWorker] Checking for due scheduled notifications...');
-      const [rows] = await db.execute(`SELECT id, event_id, payload, scheduled_at FROM scheduled_notifications WHERE sent = 0 AND scheduled_at <= NOW() LIMIT 50`);
+      // Reservar um lote de notificações pendentes para evitar
+      // envios duplicados quando múltiplas instâncias/processos executarem o worker.
+      // Marcamos elas com sent = 2 (em progresso) e depois as selecionamos para processar.
+      await db.execute("UPDATE scheduled_notifications SET sent = 2 WHERE sent = 0 AND scheduled_at <= NOW() LIMIT 50");
+      const [rows] = await db.execute(`SELECT id, event_id, payload, scheduled_at, attempts FROM scheduled_notifications WHERE sent = 2 AND scheduled_at <= NOW() LIMIT 50`);
       if (!rows || rows.length === 0) return;
 
-      // load subscriptions
+      // carregar assinaturas (excluir entradas com prefixo decision:)
       const [subscriptions] = await db.execute("SELECT * FROM subscriptions WHERE endpoint NOT LIKE 'decision:%'");
 
       for (const notif of rows) {
@@ -49,13 +53,16 @@ function startScheduledNotificationsWorker() {
             }
           }
         }
-        // Marcar como enviado apenas se ao menos uma entrega tiver sucesso
+        // Atualizar contador de tentativas e marcar o status final: sent=1 (concluído) ou sent=0 (voltar para pendente)
         try {
+          const nowSql = 'NOW()';
           if (successCount > 0) {
-            await db.execute('UPDATE scheduled_notifications SET sent = 1 WHERE id = ?', [notif.id]);
+            await db.execute('UPDATE scheduled_notifications SET sent = 1, attempts = COALESCE(attempts,0) + 1, last_attempt_at = ' + nowSql + ' WHERE id = ?', [notif.id]);
             console.log(`[scheduledNotificationsWorker] marked notification ${notif.id} as sent (successes=${successCount}, failures=${failureCount})`);
           } else {
-            console.warn(`[scheduledNotificationsWorker] no successful deliveries for notification ${notif.id} (successes=0, failures=${failureCount}); leaving as pending`);
+            // voltar para pendente para nova tentativa; incrementar attempts e registrar last_attempt_at
+            await db.execute('UPDATE scheduled_notifications SET sent = 0, attempts = COALESCE(attempts,0) + 1, last_attempt_at = ' + nowSql + ' WHERE id = ?', [notif.id]);
+            console.warn(`[scheduledNotificationsWorker] no successful deliveries for notification ${notif.id} (successes=0, failures=${failureCount}); reset to pending for retry`);
           }
         } catch (e) {
           console.error('[scheduledNotificationsWorker] error updating scheduled_notifications status', e && e.message ? e.message : e);
