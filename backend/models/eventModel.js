@@ -292,35 +292,57 @@ async function createEvent(data, reqUser) {
             }
           } else {
             let scheduledAt = null;
-            const toUtcSqlDatetime = (input) => {
+            const toDbSqlDatetime = async (input) => {
               try {
-                // Tenta parsear a entrada e retorna uma string YYYY-MM-DD HH:MM:SS em UTC
                 const s = String(input);
                 const d = new Date(s);
                 if (isNaN(d.getTime())) return null;
+                // obter offset do DB (segundos) relative to UTC
+                const [[{ offset_seconds }]] = await db.execute("SELECT TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), NOW()) AS offset_seconds");
+                const off = offset_seconds || 0;
+                const adjusted = new Date(d.getTime() + off * 1000);
                 const pad = (n) => (n < 10 ? '0' + n : '' + n);
-                // Usar getters UTC para normalizar independentemente do fuso do servidor
-                return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+                // formatamos usando getters UTC no objeto ajustado para produzir YYYY-MM-DD HH:MM:SS
+                return `${adjusted.getUTCFullYear()}-${pad(adjusted.getUTCMonth()+1)}-${pad(adjusted.getUTCDate())} ${pad(adjusted.getUTCHours())}:${pad(adjusted.getUTCMinutes())}:${pad(adjusted.getUTCSeconds())}`;
               } catch (e) {
                 return null;
               }
             };
 
             if (scheduledNotificationDatetime) {
-              const parsed = toUtcSqlDatetime(scheduledNotificationDatetime);
+              const parsed = await toDbSqlDatetime(scheduledNotificationDatetime);
               if (parsed) scheduledAt = parsed;
               else scheduledAt = String(scheduledNotificationDatetime).replace('T',' ');
             } else if (event_datetime && containsTime(event_datetime)) {
-              const parsed = toUtcSqlDatetime(event_datetime);
+              const parsed = await toDbSqlDatetime(event_datetime);
               if (parsed) scheduledAt = parsed;
               else scheduledAt = String(event_datetime).replace('T',' ');
             } else if (data.data_period_start) {
-              scheduledAt = `${data.data_period_start} ${DEFAULT_NOTIFICATION_TIME}`;
+              // data_period_start já é uma data (YYYY-MM-DD) assumir horário padrão no fuso do DB
+              const [[{ offset_seconds }]] = await db.execute("SELECT TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), NOW()) AS offset_seconds");
+              const off = offset_seconds || 0;
+              // construir datetime em fuso do DB: data + DEFAULT_NOTIFICATION_TIME, convertendo para UTC-equivalente string via getUTC*
+              const parts = (data.data_period_start || '').split('-');
+              if (parts.length === 3) {
+                const year = Number(parts[0]);
+                const month = Number(parts[1]) - 1;
+                const day = Number(parts[2]);
+                const [hh, mm, ss] = (DEFAULT_NOTIFICATION_TIME || '09:00:00').split(':').map(n => Number(n));
+                const localDate = new Date(Date.UTC(year, month, day, hh, mm, ss));
+                // localDate currently is UTC for the given YMD and time; to get DB-local equivalent, subtract offset
+                const adjusted = new Date(localDate.getTime() - off * 1000);
+                const pad = (n) => (n < 10 ? '0' + n : '' + n);
+                scheduledAt = `${adjusted.getUTCFullYear()}-${pad(adjusted.getUTCMonth()+1)}-${pad(adjusted.getUTCDate())} ${pad(adjusted.getUTCHours())}:${pad(adjusted.getUTCMinutes())}:${pad(adjusted.getUTCSeconds())}`;
+              } else {
+                scheduledAt = `${data.data_period_start} ${DEFAULT_NOTIFICATION_TIME}`;
+              }
             } else {
+              const [[{ offset_seconds }]] = await db.execute("SELECT TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), NOW()) AS offset_seconds");
+              const off = offset_seconds || 0;
               const now = new Date();
+              const adjustedNow = new Date(now.getTime() + off * 1000);
               const pad = (n) => (n < 10 ? '0' + n : '' + n);
-              // gerar timestamp em UTC por consistência com o worker
-              scheduledAt = `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
+              scheduledAt = `${adjustedNow.getUTCFullYear()}-${pad(adjustedNow.getUTCMonth()+1)}-${pad(adjustedNow.getUTCDate())} ${pad(adjustedNow.getUTCHours())}:${pad(adjustedNow.getUTCMinutes())}:${pad(adjustedNow.getUTCSeconds())}`;
             }
             try {
               await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventoId, payload, scheduledAt]);
