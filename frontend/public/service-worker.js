@@ -58,7 +58,9 @@ self.addEventListener('fetch', function(event) {
   if (req.method !== 'GET') return;
 
   // API: endpoints de eventos - estratégia network-first, com fallback para cache
-  if (url.pathname.startsWith('/api/events') || url.pathname.includes('/api/events')) {
+  // evitar servir respostas antigas em cache
+  // network-first para todas as rotas que começam com /api
+  if (url.pathname.startsWith('/api') || url.pathname.includes('/api/')) {
     event.respondWith(
       networkFirst(req).catch(() => caches.match('/offline.html'))
     );
