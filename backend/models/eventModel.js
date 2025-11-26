@@ -1,70 +1,65 @@
 const db = require('../db');
 const webpush = require('web-push');
+const { DateTime } = require('luxon');
 
 // Converte um input (string ou Date) para uma string DATETIME em UTC adequada ao MySQL.
-// - Se a string já contiver um offset (ex: Z ou +02:00) usa o parser do JS.
-// - Se a string estiver no formato 'YYYY-MM-DD' ou 'YYYY-MM-DD HH:MM[:SS]' sem offset,
-//   tratamos como horário local: montamos um Date com os componentes locais e então
-//   retornamos a representação em UTC.
+// Comportamento:
+// - Se a string contém offset (ex: Z ou +02:00) usa o parser com o offset.
+// - Se NÃO contém offset, interpretamos o valor no fuso de Brasília (America/Sao_Paulo)
+//   e então o convertemos para UTC antes de formatar para 'YYYY-MM-DD HH:mm:ss'.
 function toUtcSqlDatetime(input) {
   try {
     if (!input && input !== 0) return null;
-    // Se já for Date
+    // Date nativo -> transformar para UTC
     if (input instanceof Date) {
-      const d = input;
-      if (isNaN(d.getTime())) return null;
-      const pad = (n) => (n < 10 ? '0' + n : '' + n);
-      return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+      const dt = DateTime.fromJSDate(input, { zone: 'UTC' });
+      if (!dt.isValid) return null;
+      return dt.toFormat('yyyy-LL-dd HH:mm:ss');
     }
     const s = String(input).trim();
-    // detecta se já possui informação de fuso/offset (Z ou ±HH:MM)
     const hasOffset = /Z$|[+-]\d{2}:?\d{2}$/.test(s);
-    // formatos simples YYYY-MM-DD ou YYYY-MM-DD HH:MM[:SS]
-    const localDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(s);
-    const localDateTime = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/.test(s);
-    // formatos comuns com barra DD/MM/YYYY ou DD/MM/YYYY HH:MM[:SS]
     const slashDateOnly = /^\d{2}\/\d{2}\/\d{4}$/.test(s);
     const slashDateTime = /^\d{2}\/\d{2}\/\d{4}[ T]\d{2}:\d{2}(:\d{2})?$/.test(s);
 
-    let d;
+    let dt;
     if (hasOffset) {
-      // contém offset -> Date parser cuida corretamente
-      d = new Date(s);
-    } else if (localDateOnly || localDateTime) {
-      // construir Date usando componentes locais para evitar ambiguidade do parser
-      const parts = s.split(/[ T]/);
-      const dateParts = parts[0].split('-').map(Number);
-      const timeParts = (parts[1] || '00:00:00').split(':').map(Number);
-      const year = dateParts[0];
-      const month = (dateParts[1] || 1) - 1;
-      const day = dateParts[2] || 1;
-      const hour = timeParts[0] || 0;
-      const minute = timeParts[1] || 0;
-      const second = timeParts[2] || 0;
-      d = new Date(year, month, day, hour, minute, second); // cria no horário local
+      dt = DateTime.fromISO(s, { setZone: true }).toUTC();
     } else if (slashDateOnly || slashDateTime) {
-      // formato DD/MM/YYYY (opcional HH:MM:SS)
-      const parts = s.split(/[ T]/);
-      const dateParts = parts[0].split('/').map(Number);
-      const timeParts = (parts[1] || '00:00:00').split(':').map(Number);
-      const day = dateParts[0];
-      const month = (dateParts[1] || 1) - 1;
-      const year = dateParts[2] || 1970;
-      const hour = timeParts[0] || 0;
-      const minute = timeParts[1] || 0;
-      const second = timeParts[2] || 0;
-      d = new Date(year, month, day, hour, minute, second);
-    } else if (/^\d+$/.test(s)) {
-      // timestamp numérico (ms)
-      d = new Date(Number(s));
+      // formatos DD/MM/YYYY [HH:mm[:ss]] interpretados como horário de Brasília
+      if (slashDateOnly) {
+        dt = DateTime.fromFormat(s, 'dd/LL/yyyy', { zone: 'America/Sao_Paulo' }).toUTC();
+      } else {
+        // ajustar formatos com HH:mm ou HH:mm:ss
+        const parts = s.split(/[ T]/);
+        const timePart = parts[1] || '00:00:00';
+        const fmt = timePart.split(':').length === 2 ? 'dd/LL/yyyy HH:mm' : 'dd/LL/yyyy HH:mm:ss';
+        dt = DateTime.fromFormat(s, fmt, { zone: 'America/Sao_Paulo' }).toUTC();
+      }
     } else {
-      // fallback: tentar o parser padrão
-      d = new Date(s);
+      // tentar ISO/ YYYY-MM-DD [HH:mm[:ss]] interpretando sem offset como horário de Brasília
+      dt = DateTime.fromISO(s, { zone: 'America/Sao_Paulo' });
+      if (!dt.isValid) {
+        const localDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(s);
+        const localDateTime = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$/.test(s);
+        if (localDateOnly) dt = DateTime.fromFormat(s, 'yyyy-LL-dd', { zone: 'America/Sao_Paulo' });
+        else if (localDateTime) {
+          const timeParts = s.split(/[ T]/)[1].split(':');
+          const fmt = timeParts.length === 2 ? 'yyyy-LL-dd HH:mm' : 'yyyy-LL-dd HH:mm:ss';
+          dt = DateTime.fromFormat(s, fmt, { zone: 'America/Sao_Paulo' });
+        } else if (/^\d+$/.test(s)) {
+          dt = DateTime.fromMillis(Number(s)).toUTC();
+        } else {
+          // fallback para tentar com Date do JS (interpreta em UTC quando possível)
+          const parsed = new Date(s);
+          if (isNaN(parsed.getTime())) return null;
+          dt = DateTime.fromJSDate(parsed, { zone: 'UTC' });
+        }
+      }
+      dt = dt.toUTC();
     }
 
-    if (!d || isNaN(d.getTime())) return null;
-    const pad = (n) => (n < 10 ? '0' + n : '' + n);
-    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+    if (!dt || !dt.isValid) return null;
+    return dt.toFormat('yyyy-LL-dd HH:mm:ss');
   } catch (e) {
     return null;
   }
@@ -430,8 +425,20 @@ async function createEvent(data, reqUser) {
                 } else {
                   console.log('[eventModel] scheduling notification (will insert):', { eventoId, scheduledAt, payloadLen: payload && payload.length });
                   try {
-                    const [insRes] = await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventoId, payload, scheduledAt]);
-                    console.log('[eventModel] inserted scheduled_notifications', { eventoId, insertId: insRes && insRes.insertId });
+                    // Evitar inserir duplicatas: verificar se já existe agendamento pendente
+                    try {
+                      const [existingRows] = await db.execute('SELECT id FROM scheduled_notifications WHERE event_id = ? AND scheduled_at = ? AND sent = 0 LIMIT 1', [eventoId, scheduledAt]);
+                      if (existingRows && existingRows.length > 0) {
+                        console.log('[eventModel] scheduled notification already exists for event, skipping insert', { eventoId, scheduledAt });
+                      } else {
+                        const [insRes] = await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventoId, payload, scheduledAt]);
+                        console.log('[eventModel] inserted scheduled_notifications', { eventoId, insertId: insRes && insRes.insertId });
+                      }
+                    } catch (chkErr) {
+                      // se a checagem falhar (por exemplo tabela não existir), tentar inserir na mesma hora
+                      const [insRes] = await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventoId, payload, scheduledAt]);
+                      console.log('[eventModel] inserted scheduled_notifications (fallback check failed)', { eventoId, insertId: insRes && insRes.insertId, chkErr: chkErr && chkErr.message });
+                    }
                   } catch (insErr) {
                     console.error('[eventModel] failed inserting scheduled_notifications', insErr && insErr.message ? insErr.message : insErr);
                   }
