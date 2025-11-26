@@ -34,9 +34,10 @@ const Login = () => {
     setMessageType('');
 
     try {
-      // Enviar dados de login para o backend
-      // console.log('Enviando dados para login:', { login, senha });
-      const response = await api.post('/users/login', { login, senha });
+      // Enviar dados de login para o backend (trim no campo login para evitar espaços acidentais)
+      const loginTrimmed = (login || '').trim();
+      // console.log('Enviando dados para login:', { login: loginTrimmed, senha });
+      const response = await api.post('/users/login', { login: loginTrimmed, senha });
       console.log('Resposta do servidor:', response.data);
       console.log('Status da resposta:', response.status);
 

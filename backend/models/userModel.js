@@ -8,15 +8,31 @@ const bcrypt = require('bcryptjs');
  */
 async function authenticate(login, senha) {
   try {
+    // Normalizar o input: remover espaços e comparar email de forma case-insensitive
+    const loginNorm = String(login || '').trim();
+    const loginLower = loginNorm.toLowerCase();
+
+    // Usar LOWER(TRIM(u.email)) = ? para garantir comparação case-insensitive e sem espaços
     const [rows] = await db.execute(`
       SELECT u.id, u.first_name, u.last_name, u.password, ut.id as user_type_id, ut.name as user_type,
              p.can_create_event, p.can_view_all_events, p.can_receive_notifications, p.can_create_user
       FROM users u
       JOIN user_types ut ON u.user_type_id = ut.id
       JOIN permissions p ON ut.id = p.user_type_id
-      WHERE u.cpf = ? OR u.email = ?
+      WHERE u.cpf = ? OR LOWER(TRIM(u.email)) = ?
       LIMIT 1
-    `, [login, login]);
+    `, [loginNorm, loginLower]);
+
+    // Debug: log quando não encontrar (ajuda a diagnosticar problemas de collation/format)
+    if ((!rows || rows.length === 0)) {
+      try {
+        console.log('authenticate: no user found for login=', loginNorm);
+        const [check] = await db.execute('SELECT id, email, cpf FROM users WHERE LOWER(TRIM(email)) = ? OR cpf = ? LIMIT 5', [loginLower, loginNorm]);
+        console.log('authenticate: check rows for normalized login:', check && check.length ? check : []);
+      } catch (e) {
+        // ignore additional check errors
+      }
+    }
 
     if (!rows || rows.length === 0) {
       console.log('authenticate: no user found for login=', login);
