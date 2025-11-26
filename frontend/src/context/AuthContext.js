@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import api from '../services/api';
 
 const AuthContext = createContext();
@@ -6,6 +6,7 @@ const AuthContext = createContext();
 export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const logoutTimerRef = useRef(null);
 
   useEffect(() => {
     // Verificar se o usuário já está autenticado ao carregar a página
@@ -17,6 +18,8 @@ export const AuthProvider = ({ children }) => {
       // Definir header Authorization para chamadas subsequentes (fallback quando cookie não for enviado)
       try { api.defaults.headers.common['Authorization'] = `Bearer ${token}`; } catch (e) { /* ignore */ }
       setIsAuthenticated(true);
+      // configurar timer de logout baseado em exp do token
+      try { scheduleAutoLogoutFromToken(token); } catch (e) { /* ignore */ }
     } else {
       console.log('Nenhuma autenticação encontrada no localStorage');
       setIsAuthenticated(false);
@@ -25,10 +28,54 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  const login = () => {
+  // limpa timer de logout pendente
+  const clearLogoutTimer = () => {
+    try {
+      if (logoutTimerRef.current) {
+        clearTimeout(logoutTimerRef.current);
+        logoutTimerRef.current = null;
+      }
+    } catch (e) {}
+  };
+
+  const scheduleAutoLogoutFromToken = (token) => {
+    try {
+      // JWT parse simples: header.payload.signature
+      const parts = token.split('.');
+      if (parts.length < 2) return;
+      const raw = parts[1];
+      const payloadJson = JSON.parse(decodeURIComponent(escape(window.atob(raw.replace(/-/g, '+').replace(/_/g, '/')))));
+      const exp = payloadJson.exp; // exp em segundos
+      if (!exp) return;
+      const nowSec = Math.floor(Date.now() / 1000);
+      const msUntilExp = (exp - nowSec) * 1000;
+      if (msUntilExp <= 0) {
+        // já expirado
+        logout();
+      } else {
+        clearLogoutTimer();
+        // programar logout 1s após expiração para garantir sincronização
+        logoutTimerRef.current = setTimeout(() => {
+          logout();
+        }, msUntilExp + 1000);
+      }
+    } catch (e) {
+      // não bloquear por erro de parsing
+    }
+  };
+
+  // login pode receber token opcional para configurar auto-logout
+  const login = (token) => {
     console.log('Usuário autenticado');
     setIsAuthenticated(true);
     console.log('Estado de autenticação atualizado:', true);
+    if (token) {
+      try { api.defaults.headers.common['Authorization'] = `Bearer ${token}`; } catch (e) {}
+      try { scheduleAutoLogoutFromToken(token); } catch (e) {}
+    } else {
+      const stored = localStorage.getItem('authToken');
+      if (stored) scheduleAutoLogoutFromToken(stored);
+    }
   };
 
   const logout = () => {
@@ -57,6 +104,7 @@ export const AuthProvider = ({ children }) => {
     
     console.log('localStorage completamente limpo por segurança');
     
+    clearLogoutTimer();
     setIsAuthenticated(false);
     console.log('Estado de autenticação atualizado:', false);
   };

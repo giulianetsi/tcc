@@ -53,7 +53,8 @@ const Login = () => {
       // Atualizar o estado de autenticação
       // Definir header Authorization para chamadas subsequentes (fallback quando cookie não for enviado)
       try { api.defaults.headers.common['Authorization'] = `Bearer ${token}`; } catch (e) { /* ignore */ }
-      authenticate();
+      // passar token para que o contexto agende logout automático pelo exp
+      authenticate(token);
 
       // Tentar registrar para notificações push (não crítico)
       console.log('Iniciando processo de notificações push...');

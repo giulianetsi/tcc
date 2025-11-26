@@ -17,4 +17,44 @@ const api = axios.create({
   withCredentials: true, //  cookies enviados com as requisições
 });
 
+// Request interceptor: attach Bearer token from localStorage if present
+api.interceptors.request.use((cfg) => {
+  try {
+    const token = localStorage.getItem('authToken');
+    if (token) cfg.headers = Object.assign(cfg.headers || {}, { Authorization: `Bearer ${token}` });
+  } catch (e) { /* ignore */ }
+  return cfg;
+}, (err) => Promise.reject(err));
+
+// se token expired / unauthorized (401) -> limpar e ir pro login
+api.interceptors.response.use((res) => res, (error) => {
+  const status = error && error.response && error.response.status;
+  if (status === 401) {
+    try {
+      // limpar localStorage
+      const userId = localStorage.getItem('user_id');
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('user_id');
+      localStorage.removeItem('user_type');
+      localStorage.removeItem('user_first_name');
+      localStorage.removeItem('user_last_name');
+      localStorage.removeItem('permissions');
+      if (userId) localStorage.removeItem(`notificationDecision_${userId}`);
+      localStorage.removeItem('notificationDecision');
+      // remover header default
+      try { delete api.defaults.headers.common['Authorization']; } catch (e) {}
+    } catch (e) {}
+
+    // redirecionar para tela de login
+    try {
+      // usar replace para não permitir voltar ao estado protegido
+      window.location.replace('/login');
+    } catch (e) {
+      // fallback
+      window.location.href = '/login';
+    }
+  }
+  return Promise.reject(error);
+});
+
 export default api;
