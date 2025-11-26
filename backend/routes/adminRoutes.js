@@ -12,5 +12,15 @@ router.put('/permissions/:user_type_id', authenticateToken, requireAdmin, update
 
 // Listar notificações agendadas pendentes para debug/admin
 router.get('/scheduled-notifications', authenticateToken, requireAdmin, listScheduledNotifications);
+// Endpoint para acionar manualmente o processamento de notificações agendadas (apenas admin)
+router.post('/scheduled-notifications/trigger', authenticateToken, requireAdmin, (req, res) => {
+	try {
+		const { triggerScheduledNotifications } = require('../controllers/adminController');
+		return triggerScheduledNotifications(req, res);
+	} catch (e) {
+		console.error('adminRoutes trigger error', e && e.message);
+		res.status(500).json({ message: 'Erro interno' });
+	}
+});
 
 module.exports = router;

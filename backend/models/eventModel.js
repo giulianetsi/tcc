@@ -218,14 +218,17 @@ async function createEvent(data, reqUser) {
   let connection;
   try {
     connection = await db.getConnection();
+    // obter lista de colunas existentes na tabela `events` para evitar ER_BAD_FIELD_ERROR
+    const [colsInfo] = await connection.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'events'");
+    const availableCols = new Set((colsInfo || []).map(r => r.COLUMN_NAME));
     // montar colunas dinamicamente
     const columns = [];
     const placeholders = [];
     const values = [];
-    if (data.titulo || data.title) { columns.push('title'); placeholders.push('?'); values.push(data.titulo || data.title); }
-    if (data.descricao || data.description) { columns.push('description'); placeholders.push('?'); values.push(data.descricao || data.description); }
-    if (data.tipo || data.type) { columns.push('type'); placeholders.push('?'); values.push(data.tipo || data.type); }
-    if (user_id) { columns.push('user_id'); placeholders.push('?'); values.push(user_id); }
+    if ((data.titulo || data.title) && availableCols.has('title')) { columns.push('title'); placeholders.push('?'); values.push(data.titulo || data.title); }
+    if ((data.descricao || data.description) && availableCols.has('description')) { columns.push('description'); placeholders.push('?'); values.push(data.descricao || data.description); }
+    if ((data.tipo || data.type) && availableCols.has('type')) { columns.push('type'); placeholders.push('?'); values.push(data.tipo || data.type); }
+    if (user_id && availableCols.has('user_id')) { columns.push('user_id'); placeholders.push('?'); values.push(user_id); }
     let isPublicValue = null;
     const is_public = data.publico || data.is_public;
     if (typeof is_public === 'string') {
@@ -236,15 +239,37 @@ async function createEvent(data, reqUser) {
     }
     if (isPublicValue !== null) { columns.push('is_public'); placeholders.push('?'); values.push(isPublicValue); }
     const event_datetime = data.data_horario_evento || data.event_datetime || data.event_datetime_raw;
-    if (event_datetime) { columns.push('event_datetime'); placeholders.push('?'); values.push(event_datetime); }
-    if (data.data_period_start) { columns.push('data_period_start'); placeholders.push('?'); values.push(data.data_period_start); }
-    if (data.data_period_end) { columns.push('data_period_end'); placeholders.push('?'); values.push(data.data_period_end); }
-    if (typeof data.mostrar_data !== 'undefined') { columns.push('mostrar_data'); placeholders.push('?'); values.push(data.mostrar_data ? 1 : 0); }
-    if (typeof data.mostrar_apenas_na_data !== 'undefined') { columns.push('mostrar_apenas_na_data'); placeholders.push('?'); values.push(data.mostrar_apenas_na_data ? 1 : 0); }
-    if (data.local_evento || data.event_location) { columns.push('event_location'); placeholders.push('?'); values.push(data.local_evento || data.event_location); }
+    if (event_datetime && availableCols.has('event_datetime')) { columns.push('event_datetime'); placeholders.push('?'); values.push(event_datetime); }
+    if (data.data_period_start && availableCols.has('data_period_start')) { columns.push('data_period_start'); placeholders.push('?'); values.push(data.data_period_start); }
+    if (data.data_period_end && availableCols.has('data_period_end')) { columns.push('data_period_end'); placeholders.push('?'); values.push(data.data_period_end); }
+    if (typeof data.mostrar_data !== 'undefined' && availableCols.has('mostrar_data')) { columns.push('mostrar_data'); placeholders.push('?'); values.push(data.mostrar_data ? 1 : 0); }
+    if (typeof data.mostrar_apenas_na_data !== 'undefined' && availableCols.has('mostrar_apenas_na_data')) { columns.push('mostrar_apenas_na_data'); placeholders.push('?'); values.push(data.mostrar_apenas_na_data ? 1 : 0); }
+    if ((data.local_evento || data.event_location) && availableCols.has('event_location')) { columns.push('event_location'); placeholders.push('?'); values.push(data.local_evento || data.event_location); }
 
     const insertSql = `INSERT INTO events (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
-    const [result] = await connection.execute(insertSql, values);
+    let result;
+    try {
+      [result] = await connection.execute(insertSql, values);
+    } catch (insErr) {
+      // caso a execução falhe por colunas inexistentes (por exemplo em diferentes versões do schema),
+      // tentar remover as colunas problemáticas e reexecutar uma vez.
+      if (insErr && insErr.code === 'ER_BAD_FIELD_ERROR' && /Unknown column/.test(insErr.message)) {
+        const missingMatch = insErr.message.match(/Unknown column '([^']+)' in 'field list'/);
+        if (missingMatch && missingMatch[1]) {
+          const missing = missingMatch[1];
+          const idx = columns.indexOf(missing);
+          if (idx !== -1) {
+            columns.splice(idx, 1);
+            placeholders.splice(idx, 1);
+            values.splice(idx, 1);
+            const retrySql = `INSERT INTO events (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
+            try { [result] = await connection.execute(retrySql, values); } catch (retryErr) { throw retryErr; }
+          } else {
+            throw insErr;
+          }
+        } else { throw insErr; }
+      } else { throw insErr; }
+    }
     const eventoId = result.insertId;
 
     // target_user_types
@@ -292,61 +317,37 @@ async function createEvent(data, reqUser) {
             }
           } else {
             let scheduledAt = null;
-            const toDbSqlDatetime = async (input) => {
+            const toUtcSqlDatetime = (input) => {
               try {
                 const s = String(input);
                 const d = new Date(s);
                 if (isNaN(d.getTime())) return null;
-                // obter offset do DB (segundos) relative to UTC
-                const [[{ offset_seconds }]] = await db.execute("SELECT TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), NOW()) AS offset_seconds");
-                const off = offset_seconds || 0;
-                const adjusted = new Date(d.getTime() + off * 1000);
                 const pad = (n) => (n < 10 ? '0' + n : '' + n);
-                // formatamos usando getters UTC no objeto ajustado para produzir YYYY-MM-DD HH:MM:SS
-                return `${adjusted.getUTCFullYear()}-${pad(adjusted.getUTCMonth()+1)}-${pad(adjusted.getUTCDate())} ${pad(adjusted.getUTCHours())}:${pad(adjusted.getUTCMinutes())}:${pad(adjusted.getUTCSeconds())}`;
+                return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
               } catch (e) {
                 return null;
               }
             };
 
             if (scheduledNotificationDatetime) {
-              const parsed = await toDbSqlDatetime(scheduledNotificationDatetime);
+              const parsed = toUtcSqlDatetime(scheduledNotificationDatetime);
               if (parsed) scheduledAt = parsed;
               else scheduledAt = String(scheduledNotificationDatetime).replace('T',' ');
             } else if (event_datetime && containsTime(event_datetime)) {
-              const parsed = await toDbSqlDatetime(event_datetime);
+              const parsed = toUtcSqlDatetime(event_datetime);
               if (parsed) scheduledAt = parsed;
               else scheduledAt = String(event_datetime).replace('T',' ');
             } else if (data.data_period_start) {
-              // data_period_start já é uma data (YYYY-MM-DD) assumir horário padrão no fuso do DB
-              const [[{ offset_seconds }]] = await db.execute("SELECT TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), NOW()) AS offset_seconds");
-              const off = offset_seconds || 0;
-              // construir datetime em fuso do DB: data + DEFAULT_NOTIFICATION_TIME, convertendo para UTC-equivalente string via getUTC*
-              const parts = (data.data_period_start || '').split('-');
-              if (parts.length === 3) {
-                const year = Number(parts[0]);
-                const month = Number(parts[1]) - 1;
-                const day = Number(parts[2]);
-                const [hh, mm, ss] = (DEFAULT_NOTIFICATION_TIME || '09:00:00').split(':').map(n => Number(n));
-                const localDate = new Date(Date.UTC(year, month, day, hh, mm, ss));
-                // localDate currently is UTC for the given YMD and time; to get DB-local equivalent, subtract offset
-                const adjusted = new Date(localDate.getTime() - off * 1000);
-                const pad = (n) => (n < 10 ? '0' + n : '' + n);
-                scheduledAt = `${adjusted.getUTCFullYear()}-${pad(adjusted.getUTCMonth()+1)}-${pad(adjusted.getUTCDate())} ${pad(adjusted.getUTCHours())}:${pad(adjusted.getUTCMinutes())}:${pad(adjusted.getUTCSeconds())}`;
-              } else {
-                scheduledAt = `${data.data_period_start} ${DEFAULT_NOTIFICATION_TIME}`;
-              }
+              scheduledAt = `${data.data_period_start} ${DEFAULT_NOTIFICATION_TIME}`;
             } else {
-              const [[{ offset_seconds }]] = await db.execute("SELECT TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), NOW()) AS offset_seconds");
-              const off = offset_seconds || 0;
               const now = new Date();
-              const adjustedNow = new Date(now.getTime() + off * 1000);
               const pad = (n) => (n < 10 ? '0' + n : '' + n);
-              scheduledAt = `${adjustedNow.getUTCFullYear()}-${pad(adjustedNow.getUTCMonth()+1)}-${pad(adjustedNow.getUTCDate())} ${pad(adjustedNow.getUTCHours())}:${pad(adjustedNow.getUTCMinutes())}:${pad(adjustedNow.getUTCSeconds())}`;
+              scheduledAt = `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
             }
             try {
+              console.log('[eventModel] scheduling notification:', { eventoId, scheduledAt, payloadLen: payload && payload.length });
               await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventoId, payload, scheduledAt]);
-            } catch (schedErr) { /* ignorar erros de agendamento */ }
+            } catch (schedErr) { console.error('[eventModel] failed inserting scheduled_notifications', schedErr && schedErr.message ? schedErr.message : schedErr); }
           }
         } catch (pushErr) { /* ignorar */ }
       })();
@@ -377,27 +378,39 @@ async function updateEvent(eventId, data, reqUser) {
   if (Number(ownerId) !== Number(userId) && !isAdmin) throw Object.assign(new Error('Apenas o criador ou administrador pode editar este evento'), { status: 403 });
 
   // executar update -- montar dinamicamente as colunas recebidas para evitar erros quando colunas inexistentes
-  const setClauses = [];
-  const values = [];
-  if (data.titulo || data.title) { setClauses.push('title = ?'); values.push(data.titulo || data.title); }
-  if (data.descricao || data.description) { setClauses.push('description = ?'); values.push(data.descricao || data.description); }
-  if (data.tipo || data.type) { setClauses.push('type = ?'); values.push(data.tipo || data.type); }
+  const candidates = [];
+  if (data.titulo || data.title) candidates.push({ col: 'title', val: data.titulo || data.title });
+  if (data.descricao || data.description) candidates.push({ col: 'description', val: data.descricao || data.description });
+  if (data.tipo || data.type) candidates.push({ col: 'type', val: data.tipo || data.type });
   if (typeof data.publico !== 'undefined' || typeof data.is_public !== 'undefined') {
     const is_public_val = (typeof data.publico !== 'undefined') ? (data.publico === 'publico' ? 1 : 0) : (data.is_public ? 1 : 0);
-    setClauses.push('is_public = ?'); values.push(is_public_val);
+    candidates.push({ col: 'is_public', val: is_public_val });
   }
-  if (data.data_horario_evento || data.event_datetime) { setClauses.push('event_datetime = ?'); values.push(data.data_horario_evento || data.event_datetime); }
-  if (typeof data.data_period_start !== 'undefined') { setClauses.push('data_period_start = ?'); values.push(data.data_period_start); }
-  if (typeof data.data_period_end !== 'undefined') { setClauses.push('data_period_end = ?'); values.push(data.data_period_end); }
-  if (typeof data.mostrar_data !== 'undefined') { setClauses.push('mostrar_data = ?'); values.push(data.mostrar_data ? 1 : 0); }
-  if (typeof data.mostrar_apenas_na_data !== 'undefined') { setClauses.push('mostrar_apenas_na_data = ?'); values.push(data.mostrar_apenas_na_data ? 1 : 0); }
-  if (data.local_evento || data.event_location) { setClauses.push('event_location = ?'); values.push(data.local_evento || data.event_location); }
-  if (typeof data.isGroupsCombined !== 'undefined') { setClauses.push('groups_combined = ?'); values.push(data.isGroupsCombined ? 1 : 0); }
+  if (data.data_horario_evento || data.event_datetime) candidates.push({ col: 'event_datetime', val: data.data_horario_evento || data.event_datetime });
+  if (typeof data.data_period_start !== 'undefined') candidates.push({ col: 'data_period_start', val: data.data_period_start });
+  if (typeof data.data_period_end !== 'undefined') candidates.push({ col: 'data_period_end', val: data.data_period_end });
+  if (typeof data.mostrar_data !== 'undefined') candidates.push({ col: 'mostrar_data', val: data.mostrar_data ? 1 : 0 });
+  if (typeof data.mostrar_apenas_na_data !== 'undefined') candidates.push({ col: 'mostrar_apenas_na_data', val: data.mostrar_apenas_na_data ? 1 : 0 });
+  if (data.local_evento || data.event_location) candidates.push({ col: 'event_location', val: data.local_evento || data.event_location });
+  if (typeof data.isGroupsCombined !== 'undefined') candidates.push({ col: 'groups_combined', val: data.isGroupsCombined ? 1 : 0 });
 
-  if (setClauses.length > 0) {
-    const updateSql = `UPDATE events SET ${setClauses.join(', ')} WHERE id = ?`;
-    values.push(eventId);
-    await db.execute(updateSql, values);
+  if (candidates.length > 0) {
+    // consultar colunas existentes
+    const [colsInfo] = await db.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'events'");
+    const availableCols = new Set((colsInfo || []).map(r => r.COLUMN_NAME));
+    const setClauses = [];
+    const values = [];
+    for (const c of candidates) {
+      if (availableCols.has(c.col)) {
+        setClauses.push(`${c.col} = ?`);
+        values.push(c.val);
+      }
+    }
+    if (setClauses.length > 0) {
+      const updateSql = `UPDATE events SET ${setClauses.join(', ')} WHERE id = ?`;
+      values.push(eventId);
+      await db.execute(updateSql, values);
+    }
   }
 
   // target_user_types
@@ -434,35 +447,32 @@ async function updateEvent(eventId, data, reqUser) {
           const containsTime = (s) => { if (!s) return false; return /T|\s+\d{2}:\d{2}|:\d{2}/.test(String(s)); };
           let scheduledAt = null;
           const event_datetime = data.data_horario_evento || data.event_datetime;
-          const toDbSqlDatetime2 = async (input) => {
+          const toUtcSqlDatetime2 = (input) => {
             try {
               const s = String(input);
               const d = new Date(s);
               if (isNaN(d.getTime())) return null;
-              const [[{ offset_seconds }]] = await db.execute("SELECT TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), NOW()) AS offset_seconds");
-              const off = offset_seconds || 0;
-              const adjusted = new Date(d.getTime() + off * 1000);
               const pad = (n) => (n < 10 ? '0' + n : '' + n);
-              return `${adjusted.getUTCFullYear()}-${pad(adjusted.getUTCMonth()+1)}-${pad(adjusted.getUTCDate())} ${pad(adjusted.getUTCHours())}:${pad(adjusted.getUTCMinutes())}:${pad(adjusted.getUTCSeconds())}`;
+              return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
             } catch (e) { return null; }
           };
           if (scheduledNotificationDatetime) {
-            const parsed = await toDbSqlDatetime2(scheduledNotificationDatetime);
+            const parsed = toUtcSqlDatetime2(scheduledNotificationDatetime);
             if (parsed) scheduledAt = parsed;
             else scheduledAt = String(scheduledNotificationDatetime).replace('T',' ');
           } else if (event_datetime && containsTime(event_datetime)) {
-            const parsed = await toDbSqlDatetime2(event_datetime);
+            const parsed = toUtcSqlDatetime2(event_datetime);
             if (parsed) scheduledAt = parsed;
             else scheduledAt = String(event_datetime).replace('T',' ');
           } else {
-            const [[{ offset_seconds }]] = await db.execute("SELECT TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), NOW()) AS offset_seconds");
-            const off = offset_seconds || 0;
             const now = new Date();
-            const adjustedNow = new Date(now.getTime() + off * 1000);
             const pad = (n) => (n < 10 ? '0' + n : '' + n);
-            scheduledAt = `${adjustedNow.getFullYear()}-${pad(adjustedNow.getMonth()+1)}-${pad(adjustedNow.getDate())} ${pad(adjustedNow.getHours())}:${pad(adjustedNow.getMinutes())}:${pad(adjustedNow.getSeconds())}`;
+            scheduledAt = `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
           }
-          try { await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventId, payload, scheduledAt]); } catch (err) {}
+          try {
+            console.log('[eventModel] scheduling notification (update):', { eventId, scheduledAt, payloadLen: payload && payload.length });
+            await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventId, payload, scheduledAt]);
+          } catch (err) { console.error('[eventModel] failed inserting scheduled_notifications (update)', err && err.message ? err.message : err); }
         }
       } catch (err) { }
     })();

@@ -425,6 +425,8 @@ CREATE TABLE events (
     is_public BOOLEAN DEFAULT FALSE,
     groups_combined BOOLEAN DEFAULT FALSE, -- Indica se múltiplos grupos são combinados (AND) ou não (OR)
     event_datetime DATETIME,
+    data_period_start DATE NULL,
+    data_period_end DATE NULL,
     event_location VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
