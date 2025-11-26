@@ -376,11 +376,29 @@ async function updateEvent(eventId, data, reqUser) {
   const isAdmin = Boolean(reqUser?.permissions && (reqUser.permissions.canViewAllEvents || reqUser.permissions.can_create_user || reqUser.permissions.canCreateUser)) || reqUser?.userTypeId === 1 || String(reqUser?.userType).toLowerCase() === 'admin';
   if (Number(ownerId) !== Number(userId) && !isAdmin) throw Object.assign(new Error('Apenas o criador ou administrador pode editar este evento'), { status: 403 });
 
-  // executar update
-  await db.execute(
-    `UPDATE events SET title = ?, description = ?, type = ?, is_public = ?, event_datetime = ?, data_period_start = ?, data_period_end = ?, mostrar_data = ?, mostrar_apenas_na_data = ?, event_location = ?, groups_combined = ? WHERE id = ?`,
-    [data.titulo || data.title || null, data.descricao || data.description || null, data.tipo || data.type || null, (data.publico === 'publico' ? 1 : 0), data.data_horario_evento || data.event_datetime || null, data.data_period_start || null, data.data_period_end || null, typeof data.mostrar_data !== 'undefined' ? (data.mostrar_data ? 1 : 0) : 1, typeof data.mostrar_apenas_na_data !== 'undefined' ? (data.mostrar_apenas_na_data ? 1 : 0) : 0, data.local_evento || data.event_location || null, data.isGroupsCombined ? 1 : 0, eventId]
-  );
+  // executar update -- montar dinamicamente as colunas recebidas para evitar erros quando colunas inexistentes
+  const setClauses = [];
+  const values = [];
+  if (data.titulo || data.title) { setClauses.push('title = ?'); values.push(data.titulo || data.title); }
+  if (data.descricao || data.description) { setClauses.push('description = ?'); values.push(data.descricao || data.description); }
+  if (data.tipo || data.type) { setClauses.push('type = ?'); values.push(data.tipo || data.type); }
+  if (typeof data.publico !== 'undefined' || typeof data.is_public !== 'undefined') {
+    const is_public_val = (typeof data.publico !== 'undefined') ? (data.publico === 'publico' ? 1 : 0) : (data.is_public ? 1 : 0);
+    setClauses.push('is_public = ?'); values.push(is_public_val);
+  }
+  if (data.data_horario_evento || data.event_datetime) { setClauses.push('event_datetime = ?'); values.push(data.data_horario_evento || data.event_datetime); }
+  if (typeof data.data_period_start !== 'undefined') { setClauses.push('data_period_start = ?'); values.push(data.data_period_start); }
+  if (typeof data.data_period_end !== 'undefined') { setClauses.push('data_period_end = ?'); values.push(data.data_period_end); }
+  if (typeof data.mostrar_data !== 'undefined') { setClauses.push('mostrar_data = ?'); values.push(data.mostrar_data ? 1 : 0); }
+  if (typeof data.mostrar_apenas_na_data !== 'undefined') { setClauses.push('mostrar_apenas_na_data = ?'); values.push(data.mostrar_apenas_na_data ? 1 : 0); }
+  if (data.local_evento || data.event_location) { setClauses.push('event_location = ?'); values.push(data.local_evento || data.event_location); }
+  if (typeof data.isGroupsCombined !== 'undefined') { setClauses.push('groups_combined = ?'); values.push(data.isGroupsCombined ? 1 : 0); }
+
+  if (setClauses.length > 0) {
+    const updateSql = `UPDATE events SET ${setClauses.join(', ')} WHERE id = ?`;
+    values.push(eventId);
+    await db.execute(updateSql, values);
+  }
 
   // target_user_types
   const target_user_types = data.target_user_types || data.targetUserTypes;
@@ -416,27 +434,33 @@ async function updateEvent(eventId, data, reqUser) {
           const containsTime = (s) => { if (!s) return false; return /T|\s+\d{2}:\d{2}|:\d{2}/.test(String(s)); };
           let scheduledAt = null;
           const event_datetime = data.data_horario_evento || data.event_datetime;
-          const toUtcSqlDatetime2 = (input) => {
+          const toDbSqlDatetime2 = async (input) => {
             try {
               const s = String(input);
               const d = new Date(s);
               if (isNaN(d.getTime())) return null;
+              const [[{ offset_seconds }]] = await db.execute("SELECT TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), NOW()) AS offset_seconds");
+              const off = offset_seconds || 0;
+              const adjusted = new Date(d.getTime() + off * 1000);
               const pad = (n) => (n < 10 ? '0' + n : '' + n);
-              return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+              return `${adjusted.getUTCFullYear()}-${pad(adjusted.getUTCMonth()+1)}-${pad(adjusted.getUTCDate())} ${pad(adjusted.getUTCHours())}:${pad(adjusted.getUTCMinutes())}:${pad(adjusted.getUTCSeconds())}`;
             } catch (e) { return null; }
           };
           if (scheduledNotificationDatetime) {
-            const parsed = toUtcSqlDatetime2(scheduledNotificationDatetime);
+            const parsed = await toDbSqlDatetime2(scheduledNotificationDatetime);
             if (parsed) scheduledAt = parsed;
             else scheduledAt = String(scheduledNotificationDatetime).replace('T',' ');
           } else if (event_datetime && containsTime(event_datetime)) {
-            const parsed = toUtcSqlDatetime2(event_datetime);
+            const parsed = await toDbSqlDatetime2(event_datetime);
             if (parsed) scheduledAt = parsed;
             else scheduledAt = String(event_datetime).replace('T',' ');
           } else {
+            const [[{ offset_seconds }]] = await db.execute("SELECT TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), NOW()) AS offset_seconds");
+            const off = offset_seconds || 0;
             const now = new Date();
+            const adjustedNow = new Date(now.getTime() + off * 1000);
             const pad = (n) => (n < 10 ? '0' + n : '' + n);
-            scheduledAt = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+            scheduledAt = `${adjustedNow.getFullYear()}-${pad(adjustedNow.getMonth()+1)}-${pad(adjustedNow.getDate())} ${pad(adjustedNow.getHours())}:${pad(adjustedNow.getMinutes())}:${pad(adjustedNow.getSeconds())}`;
           }
           try { await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventId, payload, scheduledAt]); } catch (err) {}
         }
