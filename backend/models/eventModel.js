@@ -371,13 +371,25 @@ async function createEvent(data, reqUser) {
         try {
           if (String(sendNotificationMode).toLowerCase() === 'immediate' || String(sendNotificationMode).toLowerCase() === 'now') {
             const [subscriptions] = await db.execute("SELECT * FROM subscriptions WHERE endpoint NOT LIKE 'decision:%'");
-            for (const sub of subscriptions) {
+            console.log('[eventModel] immediate send subscriptions count:', subscriptions ? subscriptions.length : 0);
+            // dedupe by endpoint to avoid double-sending to same device
+            const uniqueMap = new Map();
+            if (subscriptions && subscriptions.length) {
+              for (const s of subscriptions) {
+                if (!uniqueMap.has(s.endpoint)) uniqueMap.set(s.endpoint, s);
+              }
+            }
+            const uniqueSubscriptions = Array.from(uniqueMap.values());
+            console.log('[eventModel] immediate send uniqueSubscriptions count:', uniqueSubscriptions.length);
+            for (const sub of uniqueSubscriptions) {
               const pushSubscription = { endpoint: sub.endpoint, keys: { p256dh: sub.keys_p256dh, auth: sub.keys_auth } };
               try {
                 await webpush.sendNotification(pushSubscription, payload);
               } catch (err) {
-                if (err.statusCode === 410) {
+                if (err && err.statusCode === 410) {
                   try { await db.execute('DELETE FROM subscriptions WHERE endpoint = ?', [sub.endpoint]); } catch (delErr) { /* ignore */ }
+                } else {
+                  console.error('[eventModel] immediate send error', err && err.message ? err.message : err);
                 }
               }
             }
@@ -391,36 +403,41 @@ async function createEvent(data, reqUser) {
             if (scheduledNotificationDatetime) {
               const parsed = toUtcSqlDatetime(scheduledNotificationDatetime);
               if (parsed) scheduledAt = parsed;
-              else scheduledAt = String(scheduledNotificationDatetime).replace('T',' ');
             } else if (event_datetime && containsTime(event_datetime)) {
               const parsed = toUtcSqlDatetime(event_datetime);
               if (parsed) scheduledAt = parsed;
-              else scheduledAt = String(event_datetime).replace('T',' ');
             } else if (event_datetime) {
               // Se veio apenas a data em event_datetime (sem hora), compor com DEFAULT_NOTIFICATION_TIME
               const composedEv = `${event_datetime} ${DEFAULT_NOTIFICATION_TIME}`;
               const parsedEv = toUtcSqlDatetime(composedEv);
               if (parsedEv) scheduledAt = parsedEv;
-              else scheduledAt = composedEv;
             } else if (data.data_period_start) {
               // data_period_start contém apenas a data (YYYY-MM-DD). Converter para UTC
               const composed = `${data.data_period_start} ${DEFAULT_NOTIFICATION_TIME}`;
               const parsedPeriod = toUtcSqlDatetime(composed);
               if (parsedPeriod) scheduledAt = parsedPeriod;
-              else scheduledAt = composed;
-            } else {
-              const now = new Date();
-              const pad = (n) => (n < 10 ? '0' + n : '' + n);
-              scheduledAt = `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
             }
+
             try {
               if (!scheduledAt) {
-                console.warn('[eventModel] scheduledAt is null — parse failed, skipping scheduling for event', eventoId);
+                console.warn('[eventModel] scheduledAt is null or unparsable — skipping scheduling for event', eventoId, { scheduledNotificationDatetime, event_datetime, data_period_start: data.data_period_start });
               } else {
-                console.log('[eventModel] scheduling notification:', { eventoId, scheduledAt, payloadLen: payload && payload.length });
-                await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventoId, payload, scheduledAt]);
+                // Validar que scheduledAt esteja no futuro (UTC) para evitar envio imediato
+                const scheduledDate = new Date(scheduledAt.replace(' ', 'T') + 'Z');
+                const nowUtc = new Date();
+                if (scheduledDate.getTime() <= nowUtc.getTime()) {
+                  console.warn('[eventModel] computed scheduledAt is not in the future — skipping scheduling to avoid immediate send', { eventoId, scheduledAt, nowUtc: nowUtc.toISOString() });
+                } else {
+                  console.log('[eventModel] scheduling notification (will insert):', { eventoId, scheduledAt, payloadLen: payload && payload.length });
+                  try {
+                    const [insRes] = await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventoId, payload, scheduledAt]);
+                    console.log('[eventModel] inserted scheduled_notifications', { eventoId, insertId: insRes && insRes.insertId });
+                  } catch (insErr) {
+                    console.error('[eventModel] failed inserting scheduled_notifications', insErr && insErr.message ? insErr.message : insErr);
+                  }
+                }
               }
-            } catch (schedErr) { console.error('[eventModel] failed inserting scheduled_notifications', schedErr && schedErr.message ? schedErr.message : schedErr); }
+            } catch (schedErr) { console.error('[eventModel] unexpected error during scheduling logic', schedErr && schedErr.message ? schedErr.message : schedErr); }
           }
         } catch (pushErr) { console.error('[eventModel] background notification task error', pushErr && pushErr.message ? pushErr.message : pushErr); }
       })();
@@ -511,9 +528,18 @@ async function updateEvent(eventId, data, reqUser) {
       try {
         if (String(sendNotificationMode).toLowerCase() === 'immediate' || String(sendNotificationMode).toLowerCase() === 'now') {
           const [subscriptions] = await db.execute("SELECT * FROM subscriptions WHERE endpoint NOT LIKE 'decision:%'");
-          for (const sub of subscriptions) {
+          console.log('[eventModel] immediate update send subscriptions count:', subscriptions ? subscriptions.length : 0);
+          const uniqueMap = new Map();
+          if (subscriptions && subscriptions.length) {
+            for (const s of subscriptions) {
+              if (!uniqueMap.has(s.endpoint)) uniqueMap.set(s.endpoint, s);
+            }
+          }
+          const uniqueSubscriptions = Array.from(uniqueMap.values());
+          console.log('[eventModel] immediate update uniqueSubscriptions count:', uniqueSubscriptions.length);
+          for (const sub of uniqueSubscriptions) {
             const pushSubscription = { endpoint: sub.endpoint, keys: { p256dh: sub.keys_p256dh, auth: sub.keys_auth } };
-            try { await webpush.sendNotification(pushSubscription, payload); } catch (err) { if (err.statusCode === 410) try { await db.execute('DELETE FROM subscriptions WHERE endpoint = ?', [sub.endpoint]); } catch(e){} }
+            try { await webpush.sendNotification(pushSubscription, payload); } catch (err) { if (err && err.statusCode === 410) try { await db.execute('DELETE FROM subscriptions WHERE endpoint = ?', [sub.endpoint]); } catch(e){} else console.error('[eventModel] immediate update send error', err && err.message ? err.message : err); }
           }
         } else {
           const DEFAULT_NOTIFICATION_TIME = process.env.DEFAULT_EVENT_NOTIFICATION_TIME || '09:00:00';
@@ -525,45 +551,46 @@ async function updateEvent(eventId, data, reqUser) {
           if (scheduledNotificationDatetime) {
             const parsed = toUtcSqlDatetime2(scheduledNotificationDatetime);
             if (parsed) scheduledAt = parsed;
-            else scheduledAt = String(scheduledNotificationDatetime).replace('T',' ');
           } else if (event_datetime && containsTime(event_datetime)) {
             const parsed = toUtcSqlDatetime2(event_datetime);
             if (parsed) scheduledAt = parsed;
-            else scheduledAt = String(event_datetime).replace('T',' ');
           } else if (event_datetime) {
             // Se veio apenas a data em event_datetime (sem hora), compor com DEFAULT_NOTIFICATION_TIME
             const composedEvU = `${event_datetime} ${DEFAULT_NOTIFICATION_TIME}`;
             const parsedEvU = toUtcSqlDatetime2(composedEvU);
             if (parsedEvU) scheduledAt = parsedEvU;
-            else scheduledAt = composedEvU;
           } else if (data && data.data_period_start) {
             // Em updateEvent, se o usuário forneceu data_period_start, usar a data+hora padrão convertida para UTC
             const composed2 = `${data.data_period_start} ${DEFAULT_NOTIFICATION_TIME}`;
             const parsedPeriod2 = toUtcSqlDatetime2(composed2);
             if (parsedPeriod2) scheduledAt = parsedPeriod2;
-            else scheduledAt = composed2;
-          } else {
-            const now = new Date();
-            const pad = (n) => (n < 10 ? '0' + n : '' + n);
-            scheduledAt = `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
           }
+
           try {
-            console.log('[eventModel] scheduling notification (update):', { eventId, scheduledAt, payloadLen: payload && payload.length });
+            console.log('[eventModel] scheduling notification (update) inputs:', { eventId, scheduledNotificationDatetime, event_datetime, data_period_start: data && data.data_period_start });
             if (!scheduledAt) {
               console.warn('[eventModel] scheduledAt is null for update — parse failed, skipping scheduling for event', eventId);
             } else {
-              // Tentar atualizar qualquer agendamento pendente existente para este evento.
-              // Se não houver linhas afetadas, inserir um novo agendamento.
-              try {
-                const [updateRes] = await db.execute('UPDATE scheduled_notifications SET payload = ?, scheduled_at = ? WHERE event_id = ? AND sent = 0', [payload, scheduledAt, eventId]);
-                if (!updateRes || updateRes.affectedRows === 0) {
-                  await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventId, payload, scheduledAt]);
-                } else {
-                  console.log('[eventModel] updated existing scheduled_notifications for event', eventId, 'affectedRows=', updateRes.affectedRows);
+              // Validar futuro UTC
+              const scheduledDate = new Date(scheduledAt.replace(' ', 'T') + 'Z');
+              const nowUtc = new Date();
+              if (scheduledDate.getTime() <= nowUtc.getTime()) {
+                console.warn('[eventModel] computed scheduledAt (update) is not in the future — skipping scheduling to avoid immediate send', { eventId, scheduledAt, nowUtc: nowUtc.toISOString() });
+              } else {
+                // Tentar atualizar qualquer agendamento pendente existente para este evento.
+                // Se não houver linhas afetadas, inserir um novo agendamento.
+                try {
+                  const [updateRes] = await db.execute('UPDATE scheduled_notifications SET payload = ?, scheduled_at = ? WHERE event_id = ? AND sent = 0', [payload, scheduledAt, eventId]);
+                  if (!updateRes || updateRes.affectedRows === 0) {
+                    const [insRes] = await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventId, payload, scheduledAt]);
+                    console.log('[eventModel] inserted scheduled_notifications (update)', { eventId, insertId: insRes && insRes.insertId });
+                  } else {
+                    console.log('[eventModel] updated existing scheduled_notifications for event', eventId, 'affectedRows=', updateRes.affectedRows);
+                  }
+                } catch (uErr) {
+                  // Se update falhar por algum motivo, tentar inserir como fallback
+                  try { const [insRes2] = await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventId, payload, scheduledAt]); console.log('[eventModel] inserted scheduled_notifications (update fallback)', { eventId, insertId: insRes2 && insRes2.insertId }); } catch (insErr) { throw insErr; }
                 }
-              } catch (uErr) {
-                // Se update falhar por algum motivo, tentar inserir como fallback
-                try { await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventId, payload, scheduledAt]); } catch (insErr) { throw insErr; }
               }
             }
           } catch (err) { console.error('[eventModel] failed inserting/updating scheduled_notifications (update)', err && err.message ? err.message : err); }
