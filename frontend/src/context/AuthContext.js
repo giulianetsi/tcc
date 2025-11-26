@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import api from '../services/api';
 
 const AuthContext = createContext();
 
@@ -13,6 +14,8 @@ export const AuthProvider = ({ children }) => {
     
     if (token && userId) {
       console.log('Usuário já autenticado encontrado no localStorage');
+      // Definir header Authorization para chamadas subsequentes (fallback quando cookie não for enviado)
+      try { api.defaults.headers.common['Authorization'] = `Bearer ${token}`; } catch (e) { /* ignore */ }
       setIsAuthenticated(true);
     } else {
       console.log('Nenhuma autenticação encontrada no localStorage');
@@ -49,6 +52,8 @@ export const AuthProvider = ({ children }) => {
     
     // Limpar também a decisão geral antiga (compatibilidade)
     localStorage.removeItem('notificationDecision');
+    // Remover header Authorization do axios para evitar enviar token inválido
+    try { delete api.defaults.headers.common['Authorization']; } catch (e) { /* ignore */ }
     
     console.log('localStorage completamente limpo por segurança');
     

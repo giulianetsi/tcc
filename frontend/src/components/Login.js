@@ -51,6 +51,8 @@ const Login = () => {
       localStorage.setItem('permissions', JSON.stringify(permissions));
 
       // Atualizar o estado de autenticação
+      // Definir header Authorization para chamadas subsequentes (fallback quando cookie não for enviado)
+      try { api.defaults.headers.common['Authorization'] = `Bearer ${token}`; } catch (e) { /* ignore */ }
       authenticate();
 
       // Tentar registrar para notificações push (não crítico)

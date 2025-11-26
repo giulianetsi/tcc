@@ -134,6 +134,14 @@ const CadastroEvento = () => {
     }
   }, [editingEvento]);
 
+  // Helper: retorna string YYYY-MM-DD para a data local (não UTC)
+  const getLocalDateString = (d = new Date()) => {
+    const y = d.getFullYear();
+    const m = (`0${d.getMonth() + 1}`).slice(-2);
+    const day = (`0${d.getDate()}`).slice(-2);
+    return `${y}-${m}-${day}`;
+  };
+
   // Quando usuário altera data/hora do evento, preenche automaticamente
   // o campo de agendamento da notificação (se ainda não definido).
   useEffect(() => {
@@ -242,16 +250,28 @@ const CadastroEvento = () => {
       }
   // Construir string parecida com ISO se o horário for fornecido
   const dtStr = singleTime ? `${singleDate}T${singleTime}` : `${singleDate}`;
-  // Opcional: verificar se não está no passado (se hora fornecida use hora, caso contrário compare datas)
-      const now = new Date();
-      const compare = singleTime ? new Date(`${singleDate}T${singleTime}`) : new Date(singleDate + 'T00:00:00');
-      if (!isNaN(compare.getTime()) && compare < now) {
-        setMessage('A data selecionada não pode ser no passado.');
-        setMessageType('error');
-        setLoading(false);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        return;
-      }
+  // Validação: permitir evento no dia atual quando não há hora específica;
+  // se houver hora, garantir que seja posterior ao momento atual.
+  const now = new Date();
+  if (singleTime) {
+    const eventDateTime = new Date(`${singleDate}T${singleTime}`);
+    if (isNaN(eventDateTime.getTime()) || eventDateTime < now) {
+      setMessage('A data/hora do evento não pode ser no passado.');
+      setMessageType('error');
+      setLoading(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+  } else {
+    const todayStr = getLocalDateString();
+    if (singleDate < todayStr) {
+      setMessage('A data selecionada não pode ser anterior a hoje.');
+      setMessageType('error');
+      setLoading(false);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+  }
       // Adicionar ao payload a data/hora escolhida
       payloadDate.data_horario_evento = dtStr;
     } else {
@@ -312,8 +332,8 @@ const CadastroEvento = () => {
         return;
       }
       const now = new Date();
-      if (sched.getTime() < now.getTime()) {
-        setMessage('A data/hora da notificação não pode ser no passado.');
+      if (sched.getTime() <= now.getTime()) {
+        setMessage('A data/hora da notificação deve ser posterior ao momento atual.');
         setMessageType('error');
         setLoading(false);
         return;
@@ -538,7 +558,7 @@ const CadastroEvento = () => {
                                 value={singleDate}
                                 onChange={(e) => setSingleDate(e.target.value)}
                                 className="form-control cadastro-evento-input"
-                                min={new Date().toISOString().slice(0, 10)}
+                                min={getLocalDateString()}
                                 required
                               />
                               <input
@@ -558,7 +578,7 @@ const CadastroEvento = () => {
                                 value={periodStart}
                                 onChange={(e) => setPeriodStart(e.target.value)}
                                 className="form-control cadastro-evento-input"
-                                min={new Date().toISOString().slice(0, 10)}
+                                min={getLocalDateString()}
                                 required
                               />
                               <input
@@ -567,7 +587,7 @@ const CadastroEvento = () => {
                                 value={periodEnd}
                                 onChange={(e) => setPeriodEnd(e.target.value)}
                                 className="form-control cadastro-evento-input"
-                                min={periodStart || new Date().toISOString().slice(0, 10)}
+                                min={periodStart || getLocalDateString()}
                                 required
                               />
                             </div>
