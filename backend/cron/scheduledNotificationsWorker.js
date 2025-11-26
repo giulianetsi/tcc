@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const db = require('../db');
 const webpush = require('web-push');
+const notificationModel = require('../models/notificationModel');
 
 // Verifica a tabela scheduled_notifications a cada minuto e envia as
 // notificações cujo horário já venceu.
@@ -31,18 +32,8 @@ async function processDue() {
       return { reserved: 0 };
     }
 
-    const [subscriptions] = await db.execute("SELECT * FROM subscriptions WHERE endpoint NOT LIKE 'decision:%'");
-    console.log('[scheduledNotificationsWorker] subscriptions count:', subscriptions ? subscriptions.length : 0);
-    // Remover duplicatas de `subscriptions` por `endpoint` para evitar enviar múltiplos pushes para o mesmo destino
-    const uniqueMap = new Map();
-    if (subscriptions && subscriptions.length) {
-      for (const s of subscriptions) {
-        if (!uniqueMap.has(s.endpoint)) uniqueMap.set(s.endpoint, s);
-      }
-    }
-    const uniqueSubscriptions = Array.from(uniqueMap.values());
-    console.log('[scheduledNotificationsWorker] unique subscriptions count:', uniqueSubscriptions.length);
-
+    // Carregar todas as subscriptions com informações do usuário (tipo e grupos) e checar can_receive_notifications
+  
     for (const notif of rows) {
       const rawPayload = notif.payload;
       let payload;
@@ -53,6 +44,16 @@ async function processDue() {
         payload = String(rawPayload);
       }
       console.log('[scheduledNotificationsWorker] payload type for notif', notif.id, '=>', typeof payload, 'len=', (payload && payload.length) ? payload.length : 0);
+      // Obter subscriptions elegíveis através do model (DB interaction encapsulada)
+      let uniqueSubscriptions = [];
+      try {
+        uniqueSubscriptions = await notificationModel.getEligibleSubscriptionsForEvent(notif.event_id);
+      } catch (e) {
+        console.warn('[scheduledNotificationsWorker] failed to get eligible subscriptions from model for event', notif.event_id, e && e.message);
+        uniqueSubscriptions = [];
+      }
+      console.log('[scheduledNotificationsWorker] eligible unique subscriptions count for notif', notif.id, ':', uniqueSubscriptions.length);
+
       let successCount = 0;
       let failureCount = 0;
       for (const sub of uniqueSubscriptions) {
