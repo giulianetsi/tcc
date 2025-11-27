@@ -1,5 +1,6 @@
 const db = require('../db');
 const webpush = require('web-push');
+const notificationModel = require('./notificationModel');
 const { DateTime } = require('luxon');
 
 // Converte um input (string ou Date) para uma string DATETIME em UTC adequada ao MySQL.
