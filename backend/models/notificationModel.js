@@ -26,6 +26,12 @@ async function getEligibleSubscriptionsForEvent(eventId) {
     console.warn('[notificationModel] could not load event audience info for event', eventId, e && e.message);
   }
 
+  // Debug: optional verbose logging controlled by environment variable
+  const debug = process.env.DEBUG_NOTIFICATION_MODEL === 'true';
+  if (debug) {
+    console.log('[notificationModel] debug: eventId=', eventId, 'targetUserTypes=', targetUserTypes, 'eventGroupIds=', eventGroupIds, 'groupsCombined=', groupsCombined);
+  }
+
   // Carregar subscriptions com info do usuário e grupos
   const [subscriptions] = await db.execute(`
     SELECT s.endpoint, s.keys_p256dh, s.keys_auth, s.user_id,
@@ -41,7 +47,9 @@ async function getEligibleSubscriptionsForEvent(eventId) {
 
   const eligible = [];
   if (subscriptions && subscriptions.length) {
+    if (debug) console.log('[notificationModel] debug: subscriptions fetched count=', subscriptions.length);
     for (const s of subscriptions) {
+      if (debug) console.log('[notificationModel] debug: subscription sample ->', { endpointPrefix: (s.endpoint||'').slice(0,80), user_id: s.user_id, user_type: s.user_type, can_receive_notifications: s.can_receive_notifications, user_group_ids: s.user_group_ids });
       try {
         // Interpretar can_receive_notifications:
         // - Se o valor for NULL/undefined (por exemplo quando não existe row em permissions), tratar como permitido
@@ -54,6 +62,18 @@ async function getEligibleSubscriptionsForEvent(eventId) {
           allowed = (canRecv === 1 || canRecv === '1' || canRecv === true || canRecv === 'true');
         }
         if (!allowed) continue;
+
+        // If the event does not define a target_user_types AND has no groups,
+        // treat this as a public notification and accept all subscriptions
+        // that passed the can_receive_notifications check. This preserves the
+        // previous behavior where notifications without audience restrictions
+        // were sent to all subscribers.
+        const noAudience = (!targetUserTypes || (Array.isArray(targetUserTypes) && targetUserTypes.length === 0)) && (!eventGroupIds || eventGroupIds.length === 0);
+        if (noAudience) {
+          if (debug) console.log('[notificationModel] debug: no audience defined -> accepting subscription', (s.endpoint||'').slice(0,120));
+          eligible.push({ endpoint: s.endpoint, keys_p256dh: s.keys_p256dh, keys_auth: s.keys_auth, user_id: s.user_id });
+          continue;
+        }
 
         // Normalizar targetUserTypes: podem ser ids (números/strings numéricas) ou nomes
         if (targetUserTypes && Array.isArray(targetUserTypes) && targetUserTypes.length > 0) {
@@ -94,6 +114,7 @@ async function getEligibleSubscriptionsForEvent(eventId) {
         eligible.push({ endpoint: s.endpoint, keys_p256dh: s.keys_p256dh, keys_auth: s.keys_auth, user_id: s.user_id });
       } catch (e) {
         // ignorar subscription com erro
+        if (debug) console.warn('[notificationModel] debug: ignoring subscription due to processing error', e && e.message);
       }
     }
   }
