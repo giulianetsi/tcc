@@ -102,26 +102,32 @@ async function getEligibleSubscriptionsForEvent(eventId) {
           const norm = (x) => (x ? String(x).toLowerCase().normalize('NFD').replace(/[\u0000-\u036f]/g, '') : '');
           const aliasMap = { student: ['aluno', 'student'], teacher: ['professor', 'teacher'], guardian: ['responsavel', 'guardian', 'responsible'], admin: ['admin'] };
 
+          if (debug) console.log('[notificationModel] debug: raw targetUserTypes entries', targetUserTypes.map(x=>({val:x, type: typeof x})));
           for (const t of targetUserTypes) {
             if (t === null || typeof t === 'undefined') continue;
             const asNum = Number(t);
-            if (!Number.isNaN(asNum) && String(t).trim() !== '') numericIds.add(asNum);
-            else {
+            if (!Number.isNaN(asNum) && String(t).trim() !== '') {
+              numericIds.add(asNum);
+            } else {
               const key = norm(t);
               if (aliasMap[key]) for (const a of aliasMap[key]) nameCandidates.push(norm(a)); else nameCandidates.push(key);
             }
           }
+          if (debug) console.log('[notificationModel] debug: nameCandidates built', nameCandidates);
 
           if (nameCandidates.length > 0) {
             try {
               const uniqNames = Array.from(new Set(nameCandidates.map(x => String(x).toLowerCase())));
+              if (debug) console.log('[notificationModel] debug: uniqNames for user_types query', uniqNames);
               const placeholders = uniqNames.map(() => '?').join(',');
               const [typeRows] = await db.execute(`SELECT id, name FROM user_types WHERE LOWER(name) IN (${placeholders})`, uniqNames);
+              if (debug) console.log('[notificationModel] debug: user_types rows for names', typeRows && typeRows.length ? typeRows : '[]');
               if (typeRows && typeRows.length) for (const tr of typeRows) numericIds.add(Number(tr.id));
             } catch (e) { if (debug) console.warn('[notificationModel] debug: failed to resolve user_type ids from names', nameCandidates, e && e.message); }
           }
 
           const nameSet = new Set((nameCandidates || []).map(x => String(x).toLowerCase()).filter(Boolean));
+          if (debug) console.log('[notificationModel] debug: final nameSet', Array.from(nameSet));
 
           try {
             const [cntRows] = await db.execute('SELECT COUNT(*) as cnt FROM user_types');
