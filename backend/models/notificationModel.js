@@ -95,6 +95,8 @@ async function getEligibleSubscriptionsForEvent(eventId) {
         // Não decidimos aqui; prosseguimos para aplicar filtros de público/grupos.
 
         // Normalizar targetUserTypes: podem ser ids (números/strings numéricas) ou nomes
+        // Preparar flag para detectar se o frontend selecionou todos os tipos
+        let isAllSelected = false;
         if (targetUserTypes && Array.isArray(targetUserTypes) && targetUserTypes.length > 0) {
           // Construir conjunto de IDs de tipos de usuário a partir de targetUserTypes.
           // Suportamos tanto IDs numéricos quanto nomes (pt/en). Para nomes, consultamos
@@ -142,7 +144,6 @@ async function getEligibleSubscriptionsForEvent(eventId) {
           // Detectar se o frontend selecionou efetivamente TODOS os tipos de usuário.
           // Se numericIds (resolvido por nomes/ids) corresponder ao número total de tipos na tabela,
           // trataremos isso como 'Todos' e não aplicaremos filtro por tipo.
-          let isAllSelected = false;
           try {
             const [cntRows] = await db.execute('SELECT COUNT(*) as cnt FROM user_types');
             const totalTypes = cntRows && cntRows[0] ? Number(cntRows[0].cnt) : 0;
