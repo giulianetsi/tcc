@@ -166,6 +166,8 @@ async function getEligibleSubscriptionsForEvent(eventId) {
             }
           }
 
+          if (debug) console.log('[notificationModel] debug: resolved type match sets', { user_id: s.user_id, numericIds: Array.from(numericIds), nameSet: Array.from(nameSet), s_user_type: s.user_type, s_user_type_id: s.user_type_id });
+
           let matchesType = false;
           // Primeiro, comparar por ID (quando disponível)
           if (numericIds.size > 0 && s.user_type_id) {
