@@ -143,9 +143,27 @@ async function getEligibleSubscriptionsForEvent(eventId) {
             }
           }
 
+          // Construir conjunto de nomes normalizados para comparação direta (fallback)
+          const nameSet = new Set();
+          for (const t of targetUserTypes) {
+            if (t === null || typeof t === 'undefined') continue;
+            const key = norm(t);
+            if (aliasMap[key]) {
+              for (const a of aliasMap[key]) nameSet.add(norm(a));
+            } else {
+              nameSet.add(key);
+            }
+          }
+
           let matchesType = false;
+          // Primeiro, comparar por ID (quando disponível)
           if (numericIds.size > 0 && s.user_type_id) {
             if (numericIds.has(Number(s.user_type_id))) matchesType = true;
+          }
+          // Fallback: comparar por nome normalizado do user_type
+          if (!matchesType && nameSet.size > 0) {
+            const stype = norm(s.user_type || '');
+            if (nameSet.has(stype)) matchesType = true;
           }
 
           if (!matchesType) continue;
