@@ -43,9 +43,16 @@ async function getEligibleSubscriptionsForEvent(eventId) {
   if (subscriptions && subscriptions.length) {
     for (const s of subscriptions) {
       try {
-        // aceitar explicitamente: 1, '1', true, 'true' -> caso NULL, 0, '0' => não mandar
+        // Interpretar can_receive_notifications:
+        // - Se o valor for NULL/undefined (por exemplo quando não existe row em permissions), tratar como permitido
+        // - Caso contrário aceitar explicitamente: 1, '1', true, 'true'
         const canRecv = s.can_receive_notifications;
-        const allowed = (canRecv === 1 || canRecv === '1' || canRecv === true || canRecv === 'true');
+        let allowed;
+        if (canRecv === null || typeof canRecv === 'undefined') {
+          allowed = true; // fallback permissivo: quando permissions não existir, permitir
+        } else {
+          allowed = (canRecv === 1 || canRecv === '1' || canRecv === true || canRecv === 'true');
+        }
         if (!allowed) continue;
 
         // Normalizar targetUserTypes: podem ser ids (números/strings numéricas) ou nomes
