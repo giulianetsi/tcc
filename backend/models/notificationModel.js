@@ -84,19 +84,15 @@ async function getEligibleSubscriptionsForEvent(eventId) {
           if (debug) console.warn('[notificationModel] debug: failed to read decision for user', s.user_id, e && e.message);
         }
 
-        if (!allowed) continue;
-
-        // Se o evento não definir `target_user_types` E não tiver grupos,
-        // tratar como notificação pública e aceitar todas as subscriptions
-        // que passaram na checagem `can_receive_notifications`. Isso preserva
-        // o comportamento anterior em que notificações sem restrição de público
-        // eram enviadas para todos os inscritos.
-        const noAudience = (!targetUserTypes || (Array.isArray(targetUserTypes) && targetUserTypes.length === 0)) && (!eventGroupIds || eventGroupIds.length === 0);
-        if (noAudience) {
-          if (debug) console.log('[notificationModel] debug: no audience defined -> accepting subscription', (s.endpoint||'').slice(0,120));
-          eligible.push({ endpoint: s.endpoint, keys_p256dh: s.keys_p256dh, keys_auth: s.keys_auth, user_id: s.user_id });
+        if (!allowed) {
+          if (debug) console.log('[notificationModel] debug: rejecting subscription (not allowed)', { user_id: s.user_id, can_receive_notifications: s.can_receive_notifications });
           continue;
         }
+
+        // Nota: o caso 'sem público definido' (nenhum target_user_types e nenhum grupo)
+        // será tratado abaixo **depois** que processarmos target_user_types para
+        // detectar quando o frontend efetivamente selecionou "Todos" (todos os tipos).
+        // Não decidimos aqui; prosseguimos para aplicar filtros de público/grupos.
 
         // Normalizar targetUserTypes: podem ser ids (números/strings numéricas) ou nomes
         if (targetUserTypes && Array.isArray(targetUserTypes) && targetUserTypes.length > 0) {
@@ -143,6 +139,20 @@ async function getEligibleSubscriptionsForEvent(eventId) {
             }
           }
 
+          // Detectar se o frontend selecionou efetivamente TODOS os tipos de usuário.
+          // Se numericIds (resolvido por nomes/ids) corresponder ao número total de tipos na tabela,
+          // trataremos isso como 'Todos' e não aplicaremos filtro por tipo.
+          let isAllSelected = false;
+          try {
+            const [cntRows] = await db.execute('SELECT COUNT(*) as cnt FROM user_types');
+            const totalTypes = cntRows && cntRows[0] ? Number(cntRows[0].cnt) : 0;
+            if (totalTypes > 0 && numericIds.size > 0 && numericIds.size === totalTypes) {
+              isAllSelected = true;
+            }
+          } catch (e) {
+            if (debug) console.warn('[notificationModel] debug: failed to fetch user_types count', e && e.message);
+          }
+
           // Construir conjunto de nomes normalizados para comparação direta (fallback)
           const nameSet = new Set();
           for (const t of targetUserTypes) {
@@ -166,7 +176,10 @@ async function getEligibleSubscriptionsForEvent(eventId) {
             if (nameSet.has(stype)) matchesType = true;
           }
 
-          if (!matchesType) continue;
+          if (!matchesType) {
+            if (debug) console.log('[notificationModel] debug: did not match target_user_types', { user_id: s.user_id, user_type: s.user_type, user_type_id: s.user_type_id, numericIds: Array.from(numericIds), nameSet: Array.from(nameSet) });
+            continue;
+          }
         }
 
         if (eventGroupIds && eventGroupIds.length > 0) {
@@ -180,6 +193,25 @@ async function getEligibleSubscriptionsForEvent(eventId) {
           }
         }
 
+        // Determinar condição final de audiência: se não houve definição de público
+        // (target_user_types ausente/array vazio) E não houve grupos, então é público.
+        const noAudienceFinal = (!targetUserTypes || (Array.isArray(targetUserTypes) && targetUserTypes.length === 0)) && (!eventGroupIds || eventGroupIds.length === 0);
+
+        // Se o frontend selecionou todos os tipos (isAllSelected) e não há grupos,
+        // tratar como pública (aceitar todos que passaram allowed).
+        if (isAllSelected && (!eventGroupIds || eventGroupIds.length === 0)) {
+          if (debug) console.log('[notificationModel] debug: frontend selected ALL user types -> accepting subscription', s.user_id);
+          eligible.push({ endpoint: s.endpoint, keys_p256dh: s.keys_p256dh, keys_auth: s.keys_auth, user_id: s.user_id });
+          continue;
+        }
+
+        if (noAudienceFinal) {
+          if (debug) console.log('[notificationModel] debug: no audience defined -> accepting subscription', (s.endpoint||'').slice(0,120));
+          eligible.push({ endpoint: s.endpoint, keys_p256dh: s.keys_p256dh, keys_auth: s.keys_auth, user_id: s.user_id });
+          continue;
+        }
+
+        if (debug) console.log('[notificationModel] debug: accepting subscription', { user_id: s.user_id, endpointPrefix: (s.endpoint||'').slice(0,80) });
         eligible.push({ endpoint: s.endpoint, keys_p256dh: s.keys_p256dh, keys_auth: s.keys_auth, user_id: s.user_id });
       } catch (e) {
         // ignorar subscription com erro
