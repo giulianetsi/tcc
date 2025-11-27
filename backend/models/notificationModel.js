@@ -90,118 +90,66 @@ async function getEligibleSubscriptionsForEvent(eventId) {
         }
 
         // Nota: o caso 'sem público definido' (nenhum target_user_types e nenhum grupo)
-        // será tratado abaixo **depois** que processarmos target_user_types para
-        // detectar quando o frontend efetivamente selecionou "Todos" (todos os tipos).
-        // Não decidimos aqui; prosseguimos para aplicar filtros de público/grupos.
+        // será tratado abaixo. Aqui calculamos matchesType e matchesGroup.
 
-        // Normalizar targetUserTypes: podem ser ids (números/strings numéricas) ou nomes
-        // Preparar flag para detectar se o frontend selecionou todos os tipos
+        let matchesType = null; // null = não aplicado
+        let matchesGroup = null;
         let isAllSelected = false;
+
         if (targetUserTypes && Array.isArray(targetUserTypes) && targetUserTypes.length > 0) {
-          // Construir conjunto de IDs de tipos de usuário a partir de targetUserTypes.
-          // Suportamos tanto IDs numéricos quanto nomes (pt/en). Para nomes, consultamos
-          // a tabela `user_types` para obter os IDs reais e fazer a comparação por `user_type_id`.
           const numericIds = new Set();
           const nameCandidates = [];
           const norm = (x) => (x ? String(x).toLowerCase().normalize('NFD').replace(/[\u0000-\u036f]/g, '') : '');
-
-          const aliasMap = {
-            student: ['aluno', 'student'],
-            teacher: ['professor', 'teacher'],
-            guardian: ['responsavel', 'guardian', 'responsible'],
-            admin: ['admin']
-          };
+          const aliasMap = { student: ['aluno', 'student'], teacher: ['professor', 'teacher'], guardian: ['responsavel', 'guardian', 'responsible'], admin: ['admin'] };
 
           for (const t of targetUserTypes) {
             if (t === null || typeof t === 'undefined') continue;
             const asNum = Number(t);
-            if (!Number.isNaN(asNum) && String(t).trim() !== '') {
-              numericIds.add(asNum);
-            } else {
+            if (!Number.isNaN(asNum) && String(t).trim() !== '') numericIds.add(asNum);
+            else {
               const key = norm(t);
-              if (aliasMap[key]) {
-                for (const a of aliasMap[key]) nameCandidates.push(norm(a));
-              } else {
-                nameCandidates.push(key);
-              }
+              if (aliasMap[key]) for (const a of aliasMap[key]) nameCandidates.push(norm(a)); else nameCandidates.push(key);
             }
           }
 
-          // Se houver nomes, buscar seus IDs na tabela user_types
           if (nameCandidates.length > 0) {
             try {
               const uniqNames = Array.from(new Set(nameCandidates.map(x => String(x).toLowerCase())));
               const placeholders = uniqNames.map(() => '?').join(',');
               const [typeRows] = await db.execute(`SELECT id, name FROM user_types WHERE LOWER(name) IN (${placeholders})`, uniqNames);
-              if (typeRows && typeRows.length) {
-                for (const tr of typeRows) numericIds.add(Number(tr.id));
-              }
-            } catch (e) {
-              if (debug) console.warn('[notificationModel] debug: failed to resolve user_type ids from names', nameCandidates, e && e.message);
-            }
+              if (typeRows && typeRows.length) for (const tr of typeRows) numericIds.add(Number(tr.id));
+            } catch (e) { if (debug) console.warn('[notificationModel] debug: failed to resolve user_type ids from names', nameCandidates, e && e.message); }
           }
 
-          // Detectar se o frontend selecionou efetivamente TODOS os tipos de usuário.
-          // Se numericIds (resolvido por nomes/ids) corresponder ao número total de tipos na tabela,
-          // trataremos isso como 'Todos' e não aplicaremos filtro por tipo.
+          const nameSet = new Set((nameCandidates || []).map(x => String(x).toLowerCase()).filter(Boolean));
+
           try {
             const [cntRows] = await db.execute('SELECT COUNT(*) as cnt FROM user_types');
             const totalTypes = cntRows && cntRows[0] ? Number(cntRows[0].cnt) : 0;
-            if (totalTypes > 0 && numericIds.size > 0 && numericIds.size === totalTypes) {
-              isAllSelected = true;
+            if (totalTypes > 0 && numericIds.size > 0 && numericIds.size === totalTypes) isAllSelected = true;
+          } catch (e) { if (debug) console.warn('[notificationModel] debug: failed to fetch user_types count', e && e.message); }
+
+          if (isAllSelected) matchesType = true; else {
+            let mt = false;
+            if (numericIds.size > 0 && s.user_type_id) mt = numericIds.has(Number(s.user_type_id));
+            if (!mt && nameSet.size > 0) {
+              const stype = norm(s.user_type || '');
+              if (nameSet.has(stype)) mt = true;
             }
-          } catch (e) {
-            if (debug) console.warn('[notificationModel] debug: failed to fetch user_types count', e && e.message);
+            matchesType = mt;
           }
-
-          // Construir conjunto de nomes normalizados para comparação direta (fallback)
-          const nameSet = new Set();
-          for (const t of targetUserTypes) {
-            if (t === null || typeof t === 'undefined') continue;
-            const key = norm(t);
-            if (aliasMap[key]) {
-              for (const a of aliasMap[key]) nameSet.add(norm(a));
-            } else {
-              nameSet.add(key);
-            }
-          }
-
-          if (debug) console.log('[notificationModel] debug: resolved type match sets', { user_id: s.user_id, numericIds: Array.from(numericIds), nameSet: Array.from(nameSet), s_user_type: s.user_type, s_user_type_id: s.user_type_id });
-
-          let matchesType = false;
-          // Primeiro, comparar por ID (quando disponível)
-          if (numericIds.size > 0 && s.user_type_id) {
-            if (numericIds.has(Number(s.user_type_id))) matchesType = true;
-          }
-          // Fallback: comparar por nome normalizado do user_type
-          if (!matchesType && nameSet.size > 0) {
-            const stype = norm(s.user_type || '');
-            if (nameSet.has(stype)) matchesType = true;
-          }
-
-          if (!matchesType) {
-            if (debug) console.log('[notificationModel] debug: did not match target_user_types', { user_id: s.user_id, user_type: s.user_type, user_type_id: s.user_type_id, numericIds: Array.from(numericIds), nameSet: Array.from(nameSet) });
-            continue;
-          }
+          if (debug) console.log('[notificationModel] debug: type matching result', { user_id: s.user_id, matchesType, numericIds: Array.from(numericIds), nameSet: Array.from(nameSet), isAllSelected });
         }
 
         if (eventGroupIds && eventGroupIds.length > 0) {
           const userGroupIds = s.user_group_ids ? (s.user_group_ids.split(',').map(x => Number(x))) : [];
-          if (groupsCombined) {
-            const hasAll = eventGroupIds.every(gid => userGroupIds.includes(gid));
-            if (!hasAll) continue;
-          } else {
-            const hasAny = eventGroupIds.some(gid => userGroupIds.includes(gid));
-            if (!hasAny) continue;
-          }
+          if (groupsCombined) matchesGroup = eventGroupIds.every(gid => userGroupIds.includes(gid)); else matchesGroup = eventGroupIds.some(gid => userGroupIds.includes(gid));
+          if (debug) console.log('[notificationModel] debug: group matching result', { user_id: s.user_id, matchesGroup, userGroupIds });
         }
 
-        // Determinar condição final de audiência: se não houve definição de público
-        // (target_user_types ausente/array vazio) E não houve grupos, então é público.
+        // Determinar condição final de audiência
         const noAudienceFinal = (!targetUserTypes || (Array.isArray(targetUserTypes) && targetUserTypes.length === 0)) && (!eventGroupIds || eventGroupIds.length === 0);
 
-        // Se o frontend selecionou todos os tipos (isAllSelected) e não há grupos,
-        // tratar como pública (aceitar todos que passaram allowed).
         if (isAllSelected && (!eventGroupIds || eventGroupIds.length === 0)) {
           if (debug) console.log('[notificationModel] debug: frontend selected ALL user types -> accepting subscription', s.user_id);
           eligible.push({ endpoint: s.endpoint, keys_p256dh: s.keys_p256dh, keys_auth: s.keys_auth, user_id: s.user_id });
@@ -213,6 +161,9 @@ async function getEligibleSubscriptionsForEvent(eventId) {
           eligible.push({ endpoint: s.endpoint, keys_p256dh: s.keys_p256dh, keys_auth: s.keys_auth, user_id: s.user_id });
           continue;
         }
+
+        if (matchesType === false) { if (debug) console.log('[notificationModel] debug: reject by type', s.user_id); continue; }
+        if (matchesGroup === false) { if (debug) console.log('[notificationModel] debug: reject by group', s.user_id); continue; }
 
         if (debug) console.log('[notificationModel] debug: accepting subscription', { user_id: s.user_id, endpointPrefix: (s.endpoint||'').slice(0,80) });
         eligible.push({ endpoint: s.endpoint, keys_p256dh: s.keys_p256dh, keys_auth: s.keys_auth, user_id: s.user_id });
