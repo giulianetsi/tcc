@@ -366,83 +366,28 @@ async function createEvent(data, reqUser) {
         const DEFAULT_NOTIFICATION_TIME = process.env.DEFAULT_EVENT_NOTIFICATION_TIME || '09:00:00';
         try {
           if (String(sendNotificationMode).toLowerCase() === 'immediate' || String(sendNotificationMode).toLowerCase() === 'now') {
-            // Carregar subscriptions com info do usuário para filtrar pelo público-alvo do evento
-            const [subscriptions] = await db.execute(`
-              SELECT s.endpoint, s.keys_p256dh, s.keys_auth, s.user_id,
-                     ut.name AS user_type, p.can_receive_notifications, GROUP_CONCAT(ug.group_id) AS user_group_ids
-              FROM subscriptions s
-              LEFT JOIN users u ON s.user_id = u.id
-              LEFT JOIN user_types ut ON u.user_type_id = ut.id
-              LEFT JOIN permissions p ON ut.id = p.user_type_id
-              LEFT JOIN user_groups ug ON ug.user_id = u.id
-              WHERE s.endpoint NOT LIKE 'decision:%'
-              GROUP BY s.endpoint, s.keys_p256dh, s.keys_auth, s.user_id, ut.name, p.can_receive_notifications
-            `);
-            console.log('[eventModel] immediate send subscriptions (raw) count:', subscriptions ? subscriptions.length : 0);
-
-            // obter público do evento (target_user_types e grupos)
-            let targetUserTypes = null;
-            let eventGroupIds = [];
-            let groupsCombined = 0;
-            try {
-              const [evtRows] = await db.execute('SELECT target_user_types, groups_combined FROM events WHERE id = ? LIMIT 1', [eventoId]);
-              if (evtRows && evtRows.length > 0) {
-                try { targetUserTypes = evtRows[0].target_user_types ? JSON.parse(evtRows[0].target_user_types) : null; } catch (e) { targetUserTypes = evtRows[0].target_user_types; }
-                groupsCombined = evtRows[0].groups_combined || 0;
-                const [egs] = await db.execute('SELECT group_id FROM event_groups WHERE event_id = ?', [eventoId]);
-                if (egs && egs.length) eventGroupIds = egs.map(r => Number(r.group_id));
-              }
-            } catch (e) {
-              console.warn('[eventModel] could not load event audience info for immediate send', eventoId, e && e.message);
-            }
-
-            // filtrar subscriptions elegíveis
-            const eligibleSubs = [];
-            if (subscriptions && subscriptions.length) {
-              for (const s of subscriptions) {
-                try {
-                  if (!s.can_receive_notifications && s.can_receive_notifications !== 1 && s.can_receive_notifications !== '1') continue;
-                  if (targetUserTypes && Array.isArray(targetUserTypes) && targetUserTypes.length > 0) {
-                    const stype = (s.user_type || '').toString().toLowerCase();
-                    const matchesType = targetUserTypes.map(t => String(t).toLowerCase()).includes(stype);
-                    if (!matchesType) continue;
-                  }
-                  if (eventGroupIds && eventGroupIds.length > 0) {
-                    const userGroupIds = s.user_group_ids ? (s.user_group_ids.split(',').map(x => Number(x))) : [];
-                    if (groupsCombined) {
-                      const hasAll = eventGroupIds.every(gid => userGroupIds.includes(gid));
-                      if (!hasAll) continue;
-                    } else {
-                      const hasAny = eventGroupIds.some(gid => userGroupIds.includes(gid));
-                      if (!hasAny) continue;
-                    }
-                  }
-                  eligibleSubs.push(s);
-                } catch (e) {}
-              }
-            }
-
-            // dedupe por endpoint
-            const uniqueMap = new Map();
-            if (eligibleSubs && eligibleSubs.length) {
-              for (const s of eligibleSubs) {
-                if (!uniqueMap.has(s.endpoint)) uniqueMap.set(s.endpoint, s);
-              }
-            }
-            const uniqueSubscriptions = Array.from(uniqueMap.values());
-            console.log('[eventModel] immediate send eligible uniqueSubscriptions count:', uniqueSubscriptions.length);
-            for (const sub of uniqueSubscriptions) {
-              const pushSubscription = { endpoint: sub.endpoint, keys: { p256dh: sub.keys_p256dh, auth: sub.keys_auth } };
+              // Carregar subscriptions elegíveis através do model (aplica filtros de público e permissões)
+              let uniqueSubscriptions = [];
               try {
-                await webpush.sendNotification(pushSubscription, payload);
-              } catch (err) {
-                if (err && err.statusCode === 410) {
-                  try { await db.execute('DELETE FROM subscriptions WHERE endpoint = ?', [sub.endpoint]); } catch (delErr) { /* ignore */ }
-                } else {
-                  console.error('[eventModel] immediate send error', err && err.message ? err.message : err);
+                const subs = await notificationModel.getEligibleSubscriptionsForEvent(eventoId);
+                uniqueSubscriptions = subs || [];
+              } catch (subErr) {
+                console.warn('[eventModel] could not load eligible subscriptions via notificationModel', subErr && subErr.message ? subErr.message : subErr);
+              }
+
+              console.log('[eventModel] immediate send eligible uniqueSubscriptions count:', uniqueSubscriptions.length);
+              for (const sub of uniqueSubscriptions) {
+                const pushSubscription = { endpoint: sub.endpoint, keys: { p256dh: sub.keys_p256dh, auth: sub.keys_auth } };
+                try {
+                  await webpush.sendNotification(pushSubscription, payload);
+                } catch (err) {
+                  if (err && err.statusCode === 410) {
+                    try { await db.execute('DELETE FROM subscriptions WHERE endpoint = ?', [sub.endpoint]); } catch (delErr) { /* ignore */ }
+                  } else {
+                    console.error('[eventModel] immediate send error', err && err.message ? err.message : err);
+                  }
                 }
               }
-            }
           } else {
             let scheduledAt = null;
             // toUtcSqlDatetime is defined at module scope and reused by update/create flows
@@ -589,64 +534,15 @@ async function updateEvent(eventId, data, reqUser) {
       const payload = JSON.stringify({ title: 'Evento atualizado', body: `Evento atualizado: ${data.titulo || data.title || 'Sem título'}`, data: { eventoId: eventId } });
       try {
         if (String(sendNotificationMode).toLowerCase() === 'immediate' || String(sendNotificationMode).toLowerCase() === 'now') {
-          // Carregar subscriptions com info do usuário e filtrar pelo público do evento atualizado
-          const [subscriptions] = await db.execute(`
-            SELECT s.endpoint, s.keys_p256dh, s.keys_auth, s.user_id,
-                   ut.name AS user_type, p.can_receive_notifications, GROUP_CONCAT(ug.group_id) AS user_group_ids
-            FROM subscriptions s
-            LEFT JOIN users u ON s.user_id = u.id
-            LEFT JOIN user_types ut ON u.user_type_id = ut.id
-            LEFT JOIN permissions p ON ut.id = p.user_type_id
-            LEFT JOIN user_groups ug ON ug.user_id = u.id
-            WHERE s.endpoint NOT LIKE 'decision:%'
-            GROUP BY s.endpoint, s.keys_p256dh, s.keys_auth, s.user_id, ut.name, p.can_receive_notifications
-          `);
-          console.log('[eventModel] immediate update send subscriptions (raw) count:', subscriptions ? subscriptions.length : 0);
-          // carregar info do evento atualizado
-          let targetUserTypes = null;
-          let eventGroupIds = [];
-          let groupsCombined = 0;
+          // Carregar subscriptions elegíveis através do model (aplica filtros de público e permissões)
+          let uniqueSubscriptions = [];
           try {
-            const [evtRows] = await db.execute('SELECT target_user_types, groups_combined FROM events WHERE id = ? LIMIT 1', [eventId]);
-            if (evtRows && evtRows.length > 0) {
-              try { targetUserTypes = evtRows[0].target_user_types ? JSON.parse(evtRows[0].target_user_types) : null; } catch (e) { targetUserTypes = evtRows[0].target_user_types; }
-              groupsCombined = evtRows[0].groups_combined || 0;
-              const [egs] = await db.execute('SELECT group_id FROM event_groups WHERE event_id = ?', [eventId]);
-              if (egs && egs.length) eventGroupIds = egs.map(r => Number(r.group_id));
-            }
-          } catch (e) { console.warn('[eventModel] could not load event audience info for immediate update', eventId, e && e.message); }
+            const subs = await notificationModel.getEligibleSubscriptionsForEvent(eventId);
+            uniqueSubscriptions = subs || [];
+          } catch (subErr) {
+            console.warn('[eventModel] could not load eligible subscriptions via notificationModel (update)', subErr && subErr.message ? subErr.message : subErr);
+          }
 
-          const eligibleSubs = [];
-          if (subscriptions && subscriptions.length) {
-            for (const s of subscriptions) {
-              try {
-                if (!s.can_receive_notifications && s.can_receive_notifications !== 1 && s.can_receive_notifications !== '1') continue;
-                if (targetUserTypes && Array.isArray(targetUserTypes) && targetUserTypes.length > 0) {
-                  const stype = (s.user_type || '').toString().toLowerCase();
-                  const matchesType = targetUserTypes.map(t => String(t).toLowerCase()).includes(stype);
-                  if (!matchesType) continue;
-                }
-                if (eventGroupIds && eventGroupIds.length > 0) {
-                  const userGroupIds = s.user_group_ids ? (s.user_group_ids.split(',').map(x => Number(x))) : [];
-                  if (groupsCombined) {
-                    const hasAll = eventGroupIds.every(gid => userGroupIds.includes(gid));
-                    if (!hasAll) continue;
-                  } else {
-                    const hasAny = eventGroupIds.some(gid => userGroupIds.includes(gid));
-                    if (!hasAny) continue;
-                  }
-                }
-                eligibleSubs.push(s);
-              } catch (e) {}
-            }
-          }
-          const uniqueMap = new Map();
-          if (eligibleSubs && eligibleSubs.length) {
-            for (const s of eligibleSubs) {
-              if (!uniqueMap.has(s.endpoint)) uniqueMap.set(s.endpoint, s);
-            }
-          }
-          const uniqueSubscriptions = Array.from(uniqueMap.values());
           console.log('[eventModel] immediate update eligible uniqueSubscriptions count:', uniqueSubscriptions.length);
           for (const sub of uniqueSubscriptions) {
             const pushSubscription = { endpoint: sub.endpoint, keys: { p256dh: sub.keys_p256dh, auth: sub.keys_auth } };

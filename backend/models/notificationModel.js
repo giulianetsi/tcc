@@ -29,26 +29,47 @@ async function getEligibleSubscriptionsForEvent(eventId) {
   // Carregar subscriptions com info do usuário e grupos
   const [subscriptions] = await db.execute(`
     SELECT s.endpoint, s.keys_p256dh, s.keys_auth, s.user_id,
-           ut.name AS user_type, p.can_receive_notifications, GROUP_CONCAT(ug.group_id) AS user_group_ids
+           ut.id AS user_type_id, ut.name AS user_type, p.can_receive_notifications, GROUP_CONCAT(ug.group_id) AS user_group_ids
     FROM subscriptions s
     LEFT JOIN users u ON s.user_id = u.id
     LEFT JOIN user_types ut ON u.user_type_id = ut.id
     LEFT JOIN permissions p ON ut.id = p.user_type_id
     LEFT JOIN user_groups ug ON ug.user_id = u.id
     WHERE s.endpoint NOT LIKE 'decision:%'
-    GROUP BY s.endpoint, s.keys_p256dh, s.keys_auth, s.user_id, ut.name, p.can_receive_notifications
+    GROUP BY s.endpoint, s.keys_p256dh, s.keys_auth, s.user_id, ut.id, ut.name, p.can_receive_notifications
   `);
 
   const eligible = [];
   if (subscriptions && subscriptions.length) {
     for (const s of subscriptions) {
       try {
-        // aceitar explicitamente 1/'1'/true; caso NULL ou 0 => não mandar
-        if (!s.can_receive_notifications && s.can_receive_notifications !== 1 && s.can_receive_notifications !== '1' && s.can_receive_notifications !== true) continue;
+        // aceitar explicitamente: 1, '1', true, 'true' -> caso NULL, 0, '0' => não mandar
+        const canRecv = s.can_receive_notifications;
+        const allowed = (canRecv === 1 || canRecv === '1' || canRecv === true || canRecv === 'true');
+        if (!allowed) continue;
 
+        // Normalizar targetUserTypes: podem ser ids (números/strings numéricas) ou nomes
         if (targetUserTypes && Array.isArray(targetUserTypes) && targetUserTypes.length > 0) {
-          const stype = (s.user_type || '').toString().toLowerCase();
-          const matchesType = targetUserTypes.map(t => String(t).toLowerCase()).includes(stype);
+          const numericIds = new Set();
+          const nameSet = new Set();
+          for (const t of targetUserTypes) {
+            if (t === null || typeof t === 'undefined') continue;
+            const asNum = Number(t);
+            if (!Number.isNaN(asNum) && String(t).trim() !== '') numericIds.add(asNum);
+            else nameSet.add(String(t).toLowerCase());
+          }
+
+          let matchesType = false;
+          // verificar id
+          if (numericIds.size > 0 && s.user_type_id) {
+            if (numericIds.has(Number(s.user_type_id))) matchesType = true;
+          }
+          // verificar por nome (caso frontend use nomes como 'student')
+          if (!matchesType && nameSet.size > 0) {
+            const stype = (s.user_type || '').toString().toLowerCase();
+            if (nameSet.has(stype)) matchesType = true;
+          }
+
           if (!matchesType) continue;
         }
 
