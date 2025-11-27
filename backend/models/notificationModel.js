@@ -99,7 +99,7 @@ async function getEligibleSubscriptionsForEvent(eventId) {
         if (targetUserTypes && Array.isArray(targetUserTypes) && targetUserTypes.length > 0) {
           const numericIds = new Set();
           const nameCandidates = [];
-          const norm = (x) => (x ? String(x).toLowerCase().normalize('NFD').replace(/[\u0000-\u036f]/g, '') : '');
+          const norm = (x) => (x ? String(x).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : '');
           const aliasMap = { student: ['aluno', 'student'], teacher: ['professor', 'teacher'], guardian: ['responsavel', 'guardian', 'responsible'], admin: ['admin'] };
 
           if (debug) console.log('[notificationModel] debug: raw targetUserTypes entries', targetUserTypes.map(x=>({val:x, type: typeof x})));
