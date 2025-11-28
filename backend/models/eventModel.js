@@ -609,8 +609,68 @@ async function updateEvent(eventId, data, reqUser) {
   return { message: 'Evento atualizado com sucesso' };
 }
 
+// Deletar evento (apenas criador ou usuário com permissão)
+async function deleteEvent(eventId, reqUser) {
+  const userId = reqUser?.userId || null;
+  let connection;
+  try {
+    connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    // verificar existência e autor
+    const [evRows] = await connection.execute('SELECT id, user_id FROM events WHERE id = ? LIMIT 1', [eventId]);
+    if (!evRows || evRows.length === 0) {
+      const err = new Error('Evento não encontrado');
+      err.status = 404;
+      throw err;
+    }
+    const evento = evRows[0];
+
+    // verificar permissão: primeiro verificar flag em permissions (can_delete_events) se existir
+    let allowed = false;
+    try {
+      const [permRows] = await connection.execute('SELECT p.can_delete_events FROM users u JOIN user_types ut ON u.user_type_id = ut.id JOIN permissions p ON ut.id = p.user_type_id WHERE u.id = ? LIMIT 1', [userId]);
+      if (permRows && permRows.length > 0) {
+        const v = permRows[0].can_delete_events;
+        if (v === 1 || v === '1' || v === true || v === 'true') allowed = true;
+      }
+    } catch (e) {
+      // ignore and fallback to creator check
+    }
+
+    if (!allowed) {
+      // permitir se for o criador
+      if (Number(evento.user_id) === Number(userId)) allowed = true;
+    }
+
+    if (!allowed) {
+      const err = new Error('Permissão negada para deletar o evento');
+      err.status = 403;
+      throw err;
+    }
+
+    // remover dados relacionados e o evento
+    try {
+      await connection.execute('DELETE FROM event_groups WHERE event_id = ?', [eventId]);
+      await connection.execute('DELETE FROM scheduled_notifications WHERE event_id = ?', [eventId]);
+      await connection.execute('DELETE FROM events WHERE id = ?', [eventId]);
+      await connection.commit();
+      return { message: 'Evento deletado com sucesso' };
+    } catch (delErr) {
+      await connection.rollback();
+      throw delErr;
+    }
+  } catch (err) {
+    if (connection) try { await connection.rollback(); } catch (e) {}
+    throw err;
+  } finally {
+    if (connection) connection.release();
+  }
+}
+
 module.exports = {
   getEventosForUser,
   createEvent,
-  updateEvent
+  updateEvent,
+  deleteEvent
 };
