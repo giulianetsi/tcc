@@ -180,6 +180,8 @@ const registerUser = async (req, res) => {
       createdBy: req.user && req.user.userId
     });
 
+    // Envio de notificação desativado: comentar/disabilitar para evitar notificações automáticas
+    /*
     // Enviar notificação push para todos os inscritos (endpoints válidos que começam com http)
     const subscriptions = await userModel.listSubscriptions({ httpOnly: true });
     const payload = JSON.stringify({ title: 'Novo usuário cadastrado', body: `O usuário ${first_name} foi cadastrado` });
@@ -194,6 +196,7 @@ const registerUser = async (req, res) => {
       };
       await sendPushNotification(subscription, payload);
     });
+    */
 
     res.status(201).json({ message: 'Usuário registrado com sucesso', userId });
   } catch (error) {
