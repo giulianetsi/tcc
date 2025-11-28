@@ -193,7 +193,28 @@ async function getEventosForUser(reqUser) {
 
   try {
     const result = await db.execute(query, params);
-    return { events: result[0], effectiveUserId };
+    const events = result[0];
+
+    // Logs diagnósticos opcionais para entender por que um evento foi incluído
+    const debugEvents = process.env.DEBUG_EVENTS_MODEL === 'true';
+    if (debugEvents) {
+      console.log('[eventModel] debug: getEventosForUser debug', { effectiveUserId, effectiveUserType, canViewAll, eventsCount: events.length });
+      const typeMap = {
+        'aluno': ['aluno','student'],
+        'professor': ['professor','teacher'],
+        'responsavel': ['responsavel','guardian'],
+        'admin': ['admin']
+      };
+      for (const ev of events) {
+        let ttypes = null;
+        try { ttypes = ev.target_user_types ? JSON.parse(ev.target_user_types) : null; } catch (e) { ttypes = ev.target_user_types; }
+        const variantes = typeMap[effectiveUserType] || [effectiveUserType];
+        const matchesType = Array.isArray(ttypes) ? variantes.some(v => ttypes.includes(v) || ttypes.includes(String(v).toLowerCase())) : (ttypes === null);
+        console.log('[eventModel] debug: eventIncluded', { eventId: ev.id, title: ev.title || ev.titulo || '(no title)', target_user_types: ttypes, grupos: ev.grupos, matchesType });
+      }
+    }
+
+    return { events, effectiveUserId };
   } catch (queryErr) {
     if (queryErr && queryErr.code === 'ER_BAD_FIELD_ERROR' && /target_user_types/.test(queryErr.message)) {
       // fallback: reconstruir query sem target_user_types
