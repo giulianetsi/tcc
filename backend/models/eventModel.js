@@ -90,7 +90,10 @@ async function getEventosForUser(reqUser) {
   }
 
   const userType = userInfo[0].user_type;
-  const canViewAll = userInfo[0].can_view_all_events;
+  // Respeitar o valor vindo do banco para `can_view_all_events`.
+  // Aceitar valores 1/'1'/true/'true' como verdadeiro; caso contrário, falsy.
+  const rawCanViewAll = userInfo[0].can_view_all_events;
+  let canViewAll = (rawCanViewAll === 1 || rawCanViewAll === '1' || rawCanViewAll === true || String(rawCanViewAll).toLowerCase() === 'true');
 
   let effectiveUserId = userId;
   let effectiveUserType = userType;
@@ -134,9 +137,10 @@ async function getEventosForUser(reqUser) {
     };
 
     const variants = typeMap[effectiveUserType] || [effectiveUserType];
-    const jsonCandidates = variants.map(v => JSON.stringify(v));
-    const likeCandidates = variants.map(v => `%${v}%`);
-    const containsClauses = variants.map(() => '(JSON_CONTAINS(e.target_user_types, ?) OR e.target_user_types LIKE ?)').join(' OR ');
+    // Nem todos os ambientes têm suporte a funções JSON (ex: JSON_CONTAINS).
+    // Para compatibilidade, usar LOWER(target_user_types) LIKE ? para detectar valores.
+    const likeCandidates = variants.map(v => `%${String(v).toLowerCase()}%`);
+    const containsClauses = variants.map(() => "LOWER(COALESCE(e.target_user_types,'')) LIKE ?").join(' OR ');
 
     query = `
       SELECT DISTINCT e.*, 
@@ -195,11 +199,8 @@ async function getEventosForUser(reqUser) {
       ORDER BY e.event_datetime ASC
     `;
 
-    const interleaved = [];
-    for (let i = 0; i < jsonCandidates.length; i++) {
-      interleaved.push(jsonCandidates[i], likeCandidates[i]);
-    }
-    params = [...interleaved, effectiveUserId, effectiveUserId];
+    // parametros para as cláusulas de tipo (apenas patterns lowercased)
+    params = [...likeCandidates, effectiveUserId, effectiveUserId];
   }
 
   try {
