@@ -151,33 +151,44 @@ async function getEventosForUser(reqUser) {
       LEFT JOIN \`groups\` g ON eg.group_id = g.id
       WHERE (
         (
-          (e.groups_combined = 0 
-           AND (
-             NOT EXISTS (
-               SELECT 1 FROM event_groups eg0 WHERE eg0.event_id = e.id
-             )
-             OR e.id IN (
-               SELECT DISTINCT eg2.event_id 
-               FROM event_groups eg2
-               JOIN user_groups ug ON eg2.group_id = ug.group_id
-               WHERE ug.user_id = ?
-             )
-           ))
-          OR
-          (e.groups_combined = 1
-           AND e.id IN (
-             SELECT eg3.event_id
-             FROM event_groups eg3
-             WHERE eg3.event_id NOT IN (
-               SELECT DISTINCT eg4.event_id
-               FROM event_groups eg4
-               WHERE eg4.group_id NOT IN (
-                 SELECT ug2.group_id
-                 FROM user_groups ug2
-                 WHERE ug2.user_id = ?
+          -- Tipo de usuário: aceitar quando não definido (NULL/empty/[])
+          (
+            e.target_user_types IS NULL OR e.target_user_types = '' OR e.target_user_types = '[]'
+          )
+          OR (
+            ${containsClauses}
+          )
+        )
+        AND (
+          (
+            (e.groups_combined = 0 
+             AND (
+               NOT EXISTS (
+                 SELECT 1 FROM event_groups eg0 WHERE eg0.event_id = e.id
                )
-             )
-           ))
+               OR e.id IN (
+                 SELECT DISTINCT eg2.event_id 
+                 FROM event_groups eg2
+                 JOIN user_groups ug ON eg2.group_id = ug.group_id
+                 WHERE ug.user_id = ?
+               )
+             ))
+            OR
+            (e.groups_combined = 1
+             AND e.id IN (
+               SELECT eg3.event_id
+               FROM event_groups eg3
+               WHERE eg3.event_id NOT IN (
+                 SELECT DISTINCT eg4.event_id
+                 FROM event_groups eg4
+                 WHERE eg4.group_id NOT IN (
+                   SELECT ug2.group_id
+                   FROM user_groups ug2
+                   WHERE ug2.user_id = ?
+                 )
+               )
+             ))
+          )
         )
       )
       GROUP BY e.id
