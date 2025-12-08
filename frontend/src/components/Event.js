@@ -102,7 +102,7 @@ export function Event({ evento, isAdmin, openModal }) {
                         className="icon-button"
                         onClick={(e) => {
                             e.stopPropagation();
-                            navigate('/add-evento', { state: { evento } });
+                            navigate('/add-event', { state: { evento } });
                         }}
                         title="Editar evento"
                     >
