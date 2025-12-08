@@ -112,11 +112,16 @@ self.addEventListener('push', function(event) {
     if (event.data) {
       try {
         data = event.data.json();
+        console.log('Payload JSON parseado:', data);
       } catch (e) {
         try {
-          const text = await event.data.text();
+          const text = event.data.text();
+          console.log('Payload texto:', text);
           // Se o backend enviou a string 'health-check' bruta, ignorar
-          if (text === 'health-check') return;
+          if (text === 'health-check') {
+            console.log('Health-check detectado, ignorando');
+            return;
+          }
           data.body = text;
         } catch (err) {
           console.log('Erro ao parsear dados da notificação:', err);
@@ -125,13 +130,13 @@ self.addEventListener('push', function(event) {
     }
 
     if (data && (data.type === 'health-check' || data.title === 'health-check' || data.body === 'health-check')) {
-      // ignorar silenciosamente
+      console.log('Health-check detectado no data, ignorando');
       return;
     }
 
-    const tag = (data && data.data && data.data.eventoId) ? `event-${data.data.eventoId}` : 'event-generic';
+    const tag = (data && data.data && data.data.eventId) ? `event-${data.data.eventId}` : 'event-generic';
     const options = {
-      body: data.body,
+      body: data.body || 'Sem descrição',
       icon: '/ifsul-logo.png',
       badge: '/ifsul-logo.png',
       data: data,
@@ -141,7 +146,8 @@ self.addEventListener('push', function(event) {
       renotify: false
     };
 
-    return self.registration.showNotification(data.title, options);
+    console.log('Exibindo notificação:', data.title, options);
+    return self.registration.showNotification(data.title || 'Notificação', options);
   })());
 });
 
