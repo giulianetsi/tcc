@@ -38,34 +38,17 @@ async function getEligibleSubscriptionsForEvent(eventId) {
 
   if (!subscriptions?.length) return [];
 
-  // Converter tipos de usuário para IDs numéricos
+  // Converter tipos de usuário para IDs (target_user_types armazena nomes como strings)
   let allowedTypeIds = new Set();
   const hasTypeFilter = targetUserTypes?.length > 0;
 
   if (hasTypeFilter) {
-    const numericIds = [];
-    const names = [];
-
-    targetUserTypes.forEach(t => {
-      if (t == null) return;
-      const num = Number(t);
-      if (!isNaN(num)) {
-        numericIds.push(num);
-      } else {
-        names.push(String(t).toLowerCase());
-      }
-    });
-
-    allowedTypeIds = new Set(numericIds);
-
-    if (names.length > 0) {
-      const namePlaceholders = names.map(() => '?').join(',');
-      const [typeRows] = await db.execute(
-        `SELECT id FROM user_types WHERE LOWER(name) IN (${namePlaceholders})`,
-        names
-      );
-      typeRows.forEach(r => allowedTypeIds.add(Number(r.id)));
-    }
+    const namePlaceholders = targetUserTypes.map(() => '?').join(',');
+    const [typeRows] = await db.execute(
+      `SELECT id FROM user_types WHERE LOWER(name) IN (${namePlaceholders})`,
+      targetUserTypes.map(t => String(t).toLowerCase())
+    );
+    typeRows.forEach(r => allowedTypeIds.add(Number(r.id)));
   }
 
   const hasGroupFilter = eventGroupIds.length > 0;
