@@ -38,26 +38,17 @@ async function getEligibleSubscriptionsForEvent(eventId) {
 
   if (!subscriptions?.length) return [];
 
-  // Converter tipos de usuário para IDs (target_user_types armazena nomes como strings)
-  let allowedTypeIds = new Set();
   const hasTypeFilter = targetUserTypes?.length > 0;
-
-  if (hasTypeFilter) {
-    const namePlaceholders = targetUserTypes.map(() => '?').join(',');
-    const [typeRows] = await db.execute(
-      `SELECT id FROM user_types WHERE LOWER(name) IN (${namePlaceholders})`,
-      targetUserTypes.map(t => String(t).toLowerCase())
-    );
-    typeRows.forEach(r => allowedTypeIds.add(Number(r.id)));
-  }
-
   const hasGroupFilter = eventGroupIds.length > 0;
+  
+  // Normalizar nomes de tipos para comparação (case-insensitive)
+  const lowerTargetTypes = hasTypeFilter ? targetUserTypes.map(t => String(t).toLowerCase()) : [];
 
   // Filtrar elegíveis
   const eligible = [];
 
   for (const sub of subscriptions) {
-    // 1. Verificar permissão geral (se pode receber, continua; senão, pula)
+    // 1. Verificar permissão geral
     if (!sub.can_receive_notifications) continue;
 
     // 2. Sem filtros = aceita todos
@@ -66,8 +57,9 @@ async function getEligibleSubscriptionsForEvent(eventId) {
       continue;
     }
 
-    // 3. Filtro de tipo
-    if (hasTypeFilter && !allowedTypeIds.has(Number(sub.user_type_id))) {
+    // 3. Filtro de tipo - comparar direto com user_type_id
+    // (user_type_id vem de ut.id na query, que corresponde ao tipo do usuário)
+    if (hasTypeFilter && !lowerTargetTypes.includes(String(sub.user_type_id).toLowerCase())) {
       continue;
     }
 
