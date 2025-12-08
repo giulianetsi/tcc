@@ -103,6 +103,9 @@ const UserProfile = () => {
         setMessage('Notificações desabilitadas. Para bloquear completamente, clique no ícone de cadeado na barra de endereço e altere a permissão de notificações para "Bloquear".');
         setMessageType('warning');
         setTimeout(() => setMessage(''), 8000);
+
+        // Atualiza o estado local para liberar o botão "Habilitar" novamente
+        setNotificationPermission('default');
       }
     } catch (err) {
       console.error('Erro ao gerenciar notificações:', err);
