@@ -134,25 +134,40 @@ self.addEventListener('push', function(event) {
       return;
     }
 
-    const tag = (data && data.data && data.data.eventId) ? `event-${data.data.eventId}` : 'event-generic';
+    // Tag única por notificação (timestamp) para evitar substituição silenciosa
+    const timestamp = Date.now();
+    const tag = (data && data.data && data.data.eventId) ? `event-${data.data.eventId}-${timestamp}` : `event-generic-${timestamp}`;
+    
     const options = {
       body: data.body || 'Sem descrição',
       icon: '/ifsul-logo.png',
       badge: '/ifsul-logo.png',
       data: data,
-      requireInteraction: false,
+      requireInteraction: true, // Força notificação a permanecer até interação
       silent: false,
       tag: tag,
-      renotify: false
+      renotify: true, // Permite renotificar mesmo com tag similar
+      vibrate: [200, 100, 200] // Vibração em dispositivos móveis
     };
 
     console.log('Exibindo notificação:', data.title, options);
+    console.log('Tag gerada:', tag);
+    
     try {
       await self.registration.showNotification(data.title || 'Notificação', options);
       console.log('Notificação exibida com sucesso');
+      
+      // Verificar se a notificação foi realmente criada
+      const notifications = await self.registration.getNotifications();
+      console.log('Total de notificações ativas:', notifications.length);
     } catch (showErr) {
       console.error('Erro ao exibir notificação:', showErr);
-      console.error('Permissão atual:', await self.registration.pushManager.permissionState ? await self.registration.pushManager.permissionState({ userVisibleOnly: true }) : 'unknown');
+      try {
+        const state = await self.registration.pushManager.permissionState({ userVisibleOnly: true });
+        console.error('Permissão atual:', state);
+      } catch (e) {
+        console.error('Não foi possível verificar permissão');
+      }
     }
   })());
 });
