@@ -14,6 +14,7 @@ const UserProfile = () => {
   const navigate = useNavigate();
   const navRef = useRef(null);
   const [underline, setUnderline] = useState({ left: 0, width: 0, visible: false });
+  const [notificationPermission, setNotificationPermission] = useState('default');
 
   const localKeys = {
     first_name: 'user_first_name',
@@ -63,7 +64,50 @@ const UserProfile = () => {
     }
   };
 
-  useEffect(() => { fetchProfile(); }, []);
+  useEffect(() => { 
+    fetchProfile(); 
+    if ('Notification' in window) {
+      setNotificationPermission(Notification.permission);
+    }
+  }, []);
+
+  const handleNotifications = async (enable) => {
+    try {
+      const userId = localStorage.getItem('user_id');
+      
+      if (enable) {
+        const permission = await Notification.requestPermission();
+        setNotificationPermission(permission);
+        
+        if (permission === 'granted') {
+          const registration = await navigator.serviceWorker.ready;
+          const vapidKey = process.env.REACT_APP_VAPID_PUBLIC_KEY || 'BBOm7i70NnvHHfmL9e2KGu_xRm-Iwxh4PQLclLFkzYus4dO1w3iN_JxVnBSSV_shoDVaxuPWDkGAqIDR-iL2s8I';
+          const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKey });
+          const sub = subscription.toJSON();
+          
+          await api.post('/users/subscribe', { endpoint: sub.endpoint, keys: sub.keys, user_id: parseInt(userId) });
+          await api.post('/users/notification-decision', { user_id: parseInt(userId), decision: 'granted' });
+          
+          setMessage('Notificações habilitadas com sucesso.');
+          setMessageType('success');
+          setTimeout(() => setMessage(''), 5000);
+        }
+      } else {
+        await api.post('/users/notification-decision', { user_id: parseInt(userId), decision: 'denied' });
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = await registration?.pushManager.getSubscription();
+        await subscription?.unsubscribe();
+        
+        setMessage('Notificações desabilitadas. Para bloquear completamente, clique no ícone de cadeado na barra de endereço e altere a permissão de notificações para "Bloquear".');
+        setMessageType('warning');
+        setTimeout(() => setMessage(''), 8000);
+      }
+    } catch (err) {
+      console.error('Erro ao gerenciar notificações:', err);
+      setMessage('Erro ao processar notificações. Tente novamente.');
+      setMessageType('danger');
+    }
+  };
 
   // atualizar posição do sublinhado deslizante quando activeTab mudar ou ao redimensionar
   useEffect(() => {
@@ -177,8 +221,16 @@ const UserProfile = () => {
       </div>
 
       {message && (
-        <div className={`alert ${messageType === 'info' ? 'alert-info' : messageType === 'warning' ? 'alert-warning' : messageType === 'success' ? 'alert-success' : 'alert-danger'} d-flex align-items-center`} role="alert">
-          <div>{message}</div>
+        <div 
+          className={`alert ${messageType === 'info' ? 'alert-info' : messageType === 'warning' ? 'alert-warning' : messageType === 'success' ? 'alert-success' : 'alert-danger'}`} 
+          role="alert"
+          style={{
+            backgroundColor: messageType === 'warning' ? '#fff3cd' : messageType === 'success' ? '#d1e7dd' : undefined,
+            borderColor: messageType === 'warning' ? '#ffecb5' : messageType === 'success' ? '#badbcc' : undefined,
+            color: messageType === 'warning' ? '#664d03' : messageType === 'success' ? '#0f5132' : undefined
+          }}
+        >
+          {message}
         </div>
       )}
 
@@ -215,6 +267,23 @@ const UserProfile = () => {
                   <label className="form-label">Telefone</label>
                   <input className="form-control" value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} />
                 </div>
+              </div>
+
+              {/* Notificações Push */}
+              <div className="mt-4 pt-3 border-top">
+                {notificationPermission === 'granted' ? (
+                  <button className="btn btn-outline-danger btn-sm" onClick={() => handleNotifications(false)}>
+                    Desabilitar Notificações
+                  </button>
+                ) : notificationPermission === 'denied' ? (
+                  <button className="btn btn-outline-secondary btn-sm" disabled title="Bloqueadas no navegador">
+                    Notificações Bloqueadas
+                  </button>
+                ) : (
+                  <button className="btn btn-outline-success btn-sm" onClick={() => handleNotifications(true)}>
+                    Habilitar Notificações
+                  </button>
+                )}
               </div>
 
               <div className="mt-3">

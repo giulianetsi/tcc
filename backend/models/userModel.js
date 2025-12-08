@@ -112,7 +112,17 @@ module.exports = {
 // --- Funções adicionais: subscriptions e criação de usuário ---
 
 async function addSubscription(endpoint, p256dh, auth, user_id) {
-  await db.execute('INSERT INTO subscriptions (endpoint, keys_p256dh, keys_auth, user_id) VALUES (?, ?, ?, ?)', [endpoint, p256dh, auth, user_id]);
+  try {
+    // Tentar inserir nova subscription
+    await db.execute('INSERT INTO subscriptions (endpoint, keys_p256dh, keys_auth, user_id) VALUES (?, ?, ?, ?)', [endpoint, p256dh, auth, user_id]);
+  } catch (err) {
+    // Se já existe (duplicate key), atualizar
+    if (err.code === 'ER_DUP_ENTRY') {
+      await db.execute('UPDATE subscriptions SET keys_p256dh = ?, keys_auth = ?, user_id = ? WHERE endpoint = ?', [p256dh, auth, user_id, endpoint]);
+    } else {
+      throw err;
+    }
+  }
 }
 
 async function removeSubscription(endpoint) {

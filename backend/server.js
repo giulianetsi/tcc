@@ -4,7 +4,7 @@ const cors = require('cors');
 const session = require('express-session');
 const pool = require('./db'); 
 const userRoutes = require('./routes/userRoutes');
-const eventoRoutes = require('./routes/eventoRoutes');
+const eventRoutes = require('./routes/eventRoutes');
 const groupRoutes = require('./routes/groupRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const { removeInvalidSubscriptions } = require('./controllers/userController');
@@ -137,7 +137,7 @@ app.use(session({
 }));
 
 app.use('/api/users', userRoutes);
-app.use('/api/events', eventoRoutes);
+app.use('/api/events', eventRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/admin', adminRoutes);
 

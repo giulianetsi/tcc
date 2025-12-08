@@ -8,7 +8,7 @@ import logo from '../assets/ifsul-logo.svg';
 // Ler a chave pública VAPID a partir da variável de ambiente em tempo de build
 // para que os builds de produção possam injetar a chave real. Manter a chave
 // existente apenas como fallback de desenvolvimento (será sobrescrita em produção).
-const publicVapidKey = process.env.REACT_APP_PUBLIC_VAPID_KEY || 'BIDByJJTac6ThaHCPJVS1pszWZVVqvCyCfbL68BEogxfT9MO8Swu5ouZtambPZDgo-cEOMejCAvoViWn6zpX8ig';
+const publicVapidKey = process.env.REACT_APP_PUBLIC_VAPID_KEY || 'BBOm7i70NnvHHfmL9e2KGu_xRm-Iwxh4PQLclLFkzYus4dO1w3iN_JxVnBSSV_shoDVaxuPWDkGAqIDR-iL2s8I';
 
 const Login = () => {
   const [login, setLogin] = useState('');

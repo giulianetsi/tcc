@@ -2,10 +2,10 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Login from './components/Login';
-import Cadastro from './components/Cadastro';
-import CadastroEvento from './components/CadastroEvento';
+import Register from './components/Register';
+import EventForm from './components/EventForm';
 import Dashboard from './components/Dashboard';
-import GerenciarGrupos from './components/GerenciarGrupos'; 
+import ManageGroups from './components/ManageGroups'; 
 import GroupMembers from './components/GroupMembers';
 import ManagePermissions from './components/ManagePermissions';
 import UserProfile from './components/UserProfile';
@@ -129,15 +129,15 @@ function AppInner() {
             <Route path="/login" element={<Login />} />
             <Route 
               path="/register-user" 
-              element={<PrivateRoute element={<Cadastro />} />} 
+              element={<PrivateRoute element={<Register />} />} 
             />
             <Route 
-              path="/add-evento" 
-              element={<PrivateRoute element={<CadastroEvento />} />} 
+              path="/add-event" 
+              element={<PrivateRoute element={<EventForm />} />} 
             />
             <Route 
               path="/gerenciar-grupos" 
-              element={<PrivateRoute element={<GerenciarGrupos />} />} 
+              element={<PrivateRoute element={<ManageGroups />} />} 
             />
             <Route
               path="/gerenciar-grupos/:groupId/membros"

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Button from './ui/Button';
 import api from '../services/api';
 
-const Cadastro = () => {
+const Register = () => {
   // Estado que armazena os valores do formulário.
   // Mantemos todos os campos aqui para facilitar a submissão em um único payload.
   const [formData, setFormData] = useState({
@@ -323,4 +323,4 @@ const Cadastro = () => {
   );
 };
 
-export default Cadastro;
+export default Register;

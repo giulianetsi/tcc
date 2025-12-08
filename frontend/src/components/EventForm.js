@@ -3,7 +3,7 @@ import api from '../services/api';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import Button from './ui/Button';
 
-const CadastroEvento = () => {
+const EventForm = () => {
   // Estados do formulário: campos principais
   const [titulo, setTitulo] = useState('');
   const [descricao, setDescricao] = useState('');
@@ -37,7 +37,7 @@ const CadastroEvento = () => {
 
   // Notificações: ativação e modo (immediate | scheduled)
   const [sendNotificationChecked, setSendNotificationChecked] = useState(true);
-  const [sendNotificationMode, setSendNotificationMode] = useState('scheduled'); // 'immediate' | 'scheduled'
+  const [sendNotificationMode, setSendNotificationMode] = useState('immediate'); // 'immediate' | 'scheduled'
   // Data/hora para notificação agendada no formato ISO local (YYYY-MM-DDTHH:MM)
   const [scheduledNotificationDatetime, setScheduledNotificationDatetime] = useState('');
 
@@ -385,7 +385,7 @@ const CadastroEvento = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     window.dispatchEvent(new CustomEvent('evento-updated', { detail: { id: editingEvento.id } }));
       } else {
-        const response = await api.post('/events/add-evento', {
+        const response = await api.post('/events/add-event', {
           titulo: titulo.trim(),
           descricao: descricao.trim(),
           tipo,
@@ -946,4 +946,4 @@ const getGroupIcon = (type) => {
   }
 };
 
-export default CadastroEvento;
+export default EventForm;

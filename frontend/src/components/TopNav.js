@@ -70,7 +70,7 @@ const TopNav = () => {
               const perms = JSON.parse(permsStr);
               if (perms.canCreateEvent) {
                 return (
-                  <button onClick={() => navigate('/add-evento')} className={isActive('/add-evento') ? 'topnav-btn active' : 'topnav-btn'} style={{ background: 'none', border: 'none', color: 'white', textDecoration: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', margin: '0 10px' }}>
+                  <button onClick={() => navigate('/add-event')} className={isActive('/add-event') ? 'topnav-btn active' : 'topnav-btn'} style={{ background: 'none', border: 'none', color: 'white', textDecoration: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', margin: '0 10px' }}>
                     Adicionar Evento
                   </button>
                 );

@@ -71,7 +71,7 @@ function toUtcSqlDatetime(input) {
  * Recebe o objeto decodificado do token (req.user) ou um userId numérico.
  * Retorna um objeto: { events: Array, effectiveUserId }
  */
-async function getEventosForUser(reqUser) {
+async function getEventsForUser(reqUser) {
   const userId = (reqUser && reqUser.userId) || reqUser;
 
   // comportamento idêntico ao original em eventoController.getEventos
@@ -210,7 +210,7 @@ async function getEventosForUser(reqUser) {
     // Logs diagnósticos opcionais para entender por que um evento foi incluído
     const debugEvents = process.env.DEBUG_EVENTS_MODEL === 'true';
     if (debugEvents) {
-      console.log('[eventModel] debug: getEventosForUser debug', { effectiveUserId, effectiveUserType, canViewAll, eventsCount: events.length });
+      console.log('[eventModel] debug: getEventsForUser debug', { effectiveUserId, effectiveUserType, canViewAll, eventsCount: events.length });
       const typeMap = {
         'aluno': ['aluno','student'],
         'professor': ['professor','teacher'],
@@ -363,13 +363,13 @@ async function createEvent(data, reqUser) {
         } else { throw insErr; }
       } else { throw insErr; }
     }
-    const eventoId = result.insertId;
+    const eventId = result.insertId;
 
     // target_user_types
     const target_user_types = data.target_user_types || data.targetUserTypes;
       if (target_user_types && Array.isArray(target_user_types)) {
       try {
-        await connection.execute('UPDATE events SET target_user_types = ? WHERE id = ?', [JSON.stringify(target_user_types), eventoId]);
+        await connection.execute('UPDATE events SET target_user_types = ? WHERE id = ?', [JSON.stringify(target_user_types), eventId]);
       } catch (updateError) {
         // coluna pode não existir, ignorar
       }
@@ -379,7 +379,7 @@ async function createEvent(data, reqUser) {
     const selectedGroups = data.selectedGroups || data.grupos || data.selected_groups;
     if (Array.isArray(selectedGroups) && selectedGroups.length > 0) {
       for (const groupId of selectedGroups) {
-        await connection.execute('INSERT INTO event_groups (event_id, group_id) VALUES (?, ?)', [eventoId, groupId]);
+        await connection.execute('INSERT INTO event_groups (event_id, group_id) VALUES (?, ?)', [eventId, groupId]);
       }
     }
 
@@ -394,7 +394,7 @@ async function createEvent(data, reqUser) {
 
     if (sendNotification) {
       (async () => {
-        const payload = JSON.stringify({ title: 'Novo evento', body: `Um novo evento foi criado: ${data.titulo || data.title}`, data: { eventoId } });
+        const payload = JSON.stringify({ title: 'Novo evento', body: `Um novo evento foi criado: ${data.titulo || data.title}`, data: { eventId } });
         const containsTime = (s) => { if (!s) return false; return /T|\s+\d{2}:\d{2}|:\d{2}/.test(String(s)); };
         const DEFAULT_NOTIFICATION_TIME = process.env.DEFAULT_EVENT_NOTIFICATION_TIME || '09:00:00';
         try {
@@ -402,7 +402,7 @@ async function createEvent(data, reqUser) {
               // Carregar subscriptions elegíveis através do model (aplica filtros de público e permissões)
               let uniqueSubscriptions = [];
               try {
-                const subs = await notificationModel.getEligibleSubscriptionsForEvent(eventoId);
+                const subs = await notificationModel.getEligibleSubscriptionsForEvent(eventId);
                 uniqueSubscriptions = subs || [];
               } catch (subErr) {
                 console.warn('[eventModel] could not load eligible subscriptions via notificationModel', subErr && subErr.message ? subErr.message : subErr);
@@ -413,11 +413,16 @@ async function createEvent(data, reqUser) {
                 const pushSubscription = { endpoint: sub.endpoint, keys: { p256dh: sub.keys_p256dh, auth: sub.keys_auth } };
                 try {
                   await webpush.sendNotification(pushSubscription, payload);
+                  console.log('[eventModel] ✅ SUCCESS for user:', sub.user_id);
                 } catch (err) {
                   if (err && err.statusCode === 410) {
+                    console.log('[eventModel] 410 expired, removing for user:', sub.user_id);
                     try { await db.execute('DELETE FROM subscriptions WHERE endpoint = ?', [sub.endpoint]); } catch (delErr) { /* ignore */ }
                   } else {
-                    console.error('[eventModel] immediate send error', err && err.message ? err.message : err);
+                    console.error('[eventModel] ❌ ERROR for user:', sub.user_id);
+                    console.error('  statusCode:', err.statusCode);
+                    console.error('  body:', err.body);
+                    console.error('  message:', err.message);
                   }
                 }
               }
@@ -426,7 +431,7 @@ async function createEvent(data, reqUser) {
             // toUtcSqlDatetime is defined at module scope and reused by update/create flows
 
             // Antes de inserir, registrar os inputs brutos para diagnóstico (ajuda a entender falhas)
-            console.log('[eventModel] scheduling inputs:', { eventoId, scheduledNotificationDatetime, event_datetime, data_period_start: data.data_period_start, data_period_end: data.data_period_end });
+            console.log('[eventModel] scheduling inputs:', { eventId, scheduledNotificationDatetime, event_datetime, data_period_start: data.data_period_start, data_period_end: data.data_period_end });
 
             if (scheduledNotificationDatetime) {
               const parsed = toUtcSqlDatetime(scheduledNotificationDatetime);
@@ -448,29 +453,29 @@ async function createEvent(data, reqUser) {
 
             try {
               if (!scheduledAt) {
-                console.warn('[eventModel] scheduledAt is null or unparsable — skipping scheduling for event', eventoId, { scheduledNotificationDatetime, event_datetime, data_period_start: data.data_period_start });
+                console.warn('[eventModel] scheduledAt is null or unparsable — skipping scheduling for event', eventId, { scheduledNotificationDatetime, event_datetime, data_period_start: data.data_period_start });
               } else {
                 // Validar que scheduledAt esteja no futuro (UTC) para evitar envio imediato
                 const scheduledDate = new Date(scheduledAt.replace(' ', 'T') + 'Z');
                 const nowUtc = new Date();
                 if (scheduledDate.getTime() <= nowUtc.getTime()) {
-                  console.warn('[eventModel] computed scheduledAt is not in the future — skipping scheduling to avoid immediate send', { eventoId, scheduledAt, nowUtc: nowUtc.toISOString() });
+                  console.warn('[eventModel] computed scheduledAt is not in the future — skipping scheduling to avoid immediate send', { eventId, scheduledAt, nowUtc: nowUtc.toISOString() });
                 } else {
-                  console.log('[eventModel] scheduling notification (will insert):', { eventoId, scheduledAt, payloadLen: payload && payload.length });
+                  console.log('[eventModel] scheduling notification (will insert):', { eventId, scheduledAt, payloadLen: payload && payload.length });
                   try {
                     // Evitar inserir duplicatas: verificar se já existe agendamento pendente
                     try {
-                      const [existingRows] = await db.execute('SELECT id FROM scheduled_notifications WHERE event_id = ? AND scheduled_at = ? AND sent = 0 LIMIT 1', [eventoId, scheduledAt]);
+                      const [existingRows] = await db.execute('SELECT id FROM scheduled_notifications WHERE event_id = ? AND scheduled_at = ? AND sent = 0 LIMIT 1', [eventId, scheduledAt]);
                       if (existingRows && existingRows.length > 0) {
-                        console.log('[eventModel] scheduled notification already exists for event, skipping insert', { eventoId, scheduledAt });
+                        console.log('[eventModel] scheduled notification already exists for event, skipping insert', { eventId, scheduledAt });
                       } else {
-                        const [insRes] = await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventoId, payload, scheduledAt]);
-                        console.log('[eventModel] inserted scheduled_notifications', { eventoId, insertId: insRes && insRes.insertId });
+                        const [insRes] = await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventId, payload, scheduledAt]);
+                        console.log('[eventModel] inserted scheduled_notifications', { eventId, insertId: insRes && insRes.insertId });
                       }
                     } catch (chkErr) {
                       // se a checagem falhar (por exemplo tabela não existir), tentar inserir na mesma hora
-                      const [insRes] = await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventoId, payload, scheduledAt]);
-                      console.log('[eventModel] inserted scheduled_notifications (fallback check failed)', { eventoId, insertId: insRes && insRes.insertId, chkErr: chkErr && chkErr.message });
+                      const [insRes] = await db.execute('INSERT INTO scheduled_notifications (event_id, payload, scheduled_at) VALUES (?, ?, ?)', [eventId, payload, scheduledAt]);
+                      console.log('[eventModel] inserted scheduled_notifications (fallback check failed)', { eventId, insertId: insRes && insRes.insertId, chkErr: chkErr && chkErr.message });
                     }
                   } catch (insErr) {
                     console.error('[eventModel] failed inserting scheduled_notifications', insErr && insErr.message ? insErr.message : insErr);
@@ -484,7 +489,7 @@ async function createEvent(data, reqUser) {
     }
 
     if (connection) try { connection.release(); } catch (e) {}
-    return { id: eventoId };
+    return { id: eventId };
   } catch (err) {
     try { if (connection) await connection.rollback(); } catch (rbErr) {}
     try { if (connection) connection.release(); } catch (relErr) {}
@@ -564,7 +569,7 @@ async function updateEvent(eventId, data, reqUser) {
   const scheduledNotificationDatetime = data.scheduledNotificationDatetime || data.scheduled_notification_datetime;
   if (sendNotification) {
     (async () => {
-      const payload = JSON.stringify({ title: 'Evento atualizado', body: `Evento atualizado: ${data.titulo || data.title || 'Sem título'}`, data: { eventoId: eventId } });
+      const payload = JSON.stringify({ title: 'Evento atualizado', body: `Evento atualizado: ${data.titulo || data.title || 'Sem título'}`, data: { eventId: eventId } });
       try {
         if (String(sendNotificationMode).toLowerCase() === 'immediate' || String(sendNotificationMode).toLowerCase() === 'now') {
           // Carregar subscriptions elegíveis através do model (aplica filtros de público e permissões)
@@ -579,7 +584,20 @@ async function updateEvent(eventId, data, reqUser) {
           console.log('[eventModel] immediate update eligible uniqueSubscriptions count:', uniqueSubscriptions.length);
           for (const sub of uniqueSubscriptions) {
             const pushSubscription = { endpoint: sub.endpoint, keys: { p256dh: sub.keys_p256dh, auth: sub.keys_auth } };
-            try { await webpush.sendNotification(pushSubscription, payload); } catch (err) { if (err && err.statusCode === 410) try { await db.execute('DELETE FROM subscriptions WHERE endpoint = ?', [sub.endpoint]); } catch(e){} else console.error('[eventModel] immediate update send error', err && err.message ? err.message : err); }
+            try {
+              await webpush.sendNotification(pushSubscription, payload);
+              console.log('[eventModel] UPDATE ✅ SUCCESS for user:', sub.user_id);
+            } catch (err) {
+              if (err && err.statusCode === 410) {
+                console.log('[eventModel] UPDATE 410 expired, removing for user:', sub.user_id);
+                try { await db.execute('DELETE FROM subscriptions WHERE endpoint = ?', [sub.endpoint]); } catch(e){}
+              } else {
+                console.error('[eventModel] UPDATE ❌ ERROR for user:', sub.user_id);
+                console.error('  statusCode:', err.statusCode);
+                console.error('  body:', err.body);
+                console.error('  message:', err.message);
+              }
+            }
           }
         } else {
           const DEFAULT_NOTIFICATION_TIME = process.env.DEFAULT_EVENT_NOTIFICATION_TIME || '09:00:00';
@@ -657,7 +675,7 @@ async function deleteEvent(eventId, reqUser) {
       err.status = 404;
       throw err;
     }
-    const evento = evRows[0];
+    const event = evRows[0];
 
     // verificar permissão: primeiro verificar flag em permissions (can_delete_events) se existir
     let allowed = false;
@@ -673,7 +691,7 @@ async function deleteEvent(eventId, reqUser) {
 
     if (!allowed) {
       // permitir se for o criador
-      if (Number(evento.user_id) === Number(userId)) allowed = true;
+      if (Number(event.user_id) === Number(userId)) allowed = true;
     }
 
     if (!allowed) {
@@ -702,7 +720,7 @@ async function deleteEvent(eventId, reqUser) {
 }
 
 module.exports = {
-  getEventosForUser,
+  getEventsForUser,
   createEvent,
   updateEvent,
   deleteEvent

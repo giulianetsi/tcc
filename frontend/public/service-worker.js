@@ -9,9 +9,7 @@ const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/offline.html',
-  '/ifsul-logo.png',
-  '/logo192.png',
-  '/logo512.png'
+  '/ifsul-logo.png'
 ];
 
 self.addEventListener('install', function(event) {
@@ -99,7 +97,6 @@ self.addEventListener('fetch', function(event) {
             try { await cache.put(req, res.clone()); } catch (e) { /* ignore */ }
           }
         } catch (err) {
-          // ignore caching errors
         }
         return res;
       }).catch(() => caches.match('/offline.html'));

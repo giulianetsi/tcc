@@ -53,7 +53,7 @@ function getColorForType(tipo) {
 }
 
 
-export function Evento({ evento, isAdmin, openModal }) {
+export function Event({ evento, isAdmin, openModal }) {
     const navigate = useNavigate();
     // Não renderizar cartões de espaço reservado (placeholders) — retornar null para não ocupar espaço
     if (evento.titulo === 'Placeholder') {

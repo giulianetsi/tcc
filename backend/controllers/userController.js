@@ -7,6 +7,17 @@ const crypto = require('crypto');
 // Registrar subscription do navegador (salvar endpoint + chaves no DB)
 const subscribe = async (req, res) => {
   const { endpoint, keys, user_id } = req.body;
+  
+  console.log('Subscribe request body:', { hasEndpoint: !!endpoint, hasKeys: !!keys, user_id });
+  
+  if (!endpoint) {
+    return res.status(400).json({ message: 'endpoint é obrigatório' });
+  }
+  
+  if (!keys || !keys.p256dh || !keys.auth) {
+    return res.status(400).json({ message: 'keys.p256dh e keys.auth são obrigatórios' });
+  }
+  
   const { p256dh, auth } = keys;
 
   try {

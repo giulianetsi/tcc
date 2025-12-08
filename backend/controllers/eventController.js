@@ -2,12 +2,12 @@ const db = require('../db');
 const eventModel = require('../models/eventModel');
 
 // Criar um novo evento — delega toda a lógica de DB/notifications para o model
-const addEvento = async (req, res) => {
+const addEvent = async (req, res) => {
   try {
     const result = await eventModel.createEvent(req.body, req.user);
     return res.status(201).json({ message: 'Evento criado', id: result.id });
   } catch (err) {
-    console.error('addEvento error', err);
+    console.error('addEvent error', err);
     const status = err.status || 500;
     return res.status(status).json({ message: status === 500 ? 'Erro ao criar evento' : err.message, error: err.message });
   }
@@ -15,9 +15,9 @@ const addEvento = async (req, res) => {
 
 // Buscar eventos visíveis ao usuário autenticado (usa model centralizado)
 // O model encapsula a query complexa; o controller ainda formata o resultado para o frontend
-const getEventos = async (req, res) => {
+const getEvents = async (req, res) => {
   try {
-    const { events: eventsRaw, effectiveUserId } = await eventModel.getEventosForUser(req.user);
+    const { events: eventsRaw, effectiveUserId } = await eventModel.getEventsForUser(req.user);
 
     const formattedEvents = eventsRaw.map(event => ({
       id: event.id,
@@ -81,20 +81,20 @@ const getEventIcon = (type) => {
 };
 
 // Atualizar evento (apenas criador ou admin) - delega ao model
-const updateEvento = async (req, res) => {
+const updateEvent = async (req, res) => {
   const eventId = req.params.id;
   try {
     const result = await eventModel.updateEvent(eventId, req.body, req.user);
     res.json(result);
   } catch (err) {
-    console.error('updateEvento error', err);
+    console.error('updateEvent error', err);
     const status = err.status || 500;
     res.status(status).json({ message: status === 500 ? 'Erro ao atualizar evento' : err.message, error: err.message });
   }
 };
 
 // Deletar evento (apenas criador ou admin) - delega ao model
-const deleteEvento = async (req, res) => {
+const deleteEvent = async (req, res) => {
   const eventId = req.params.id;
   try {
     const result = await eventModel.deleteEvent(eventId, req.user);
@@ -107,8 +107,8 @@ const deleteEvento = async (req, res) => {
 };
 
 module.exports = {
-  addEvento,
-  getEventos,
-  updateEvento,
-  deleteEvento
+  addEvent,
+  getEvents,
+  updateEvent,
+  deleteEvent
 };

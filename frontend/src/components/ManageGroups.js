@@ -4,7 +4,7 @@ import api from '../services/api';
 import { useNavigate } from 'react-router-dom';
 // usando overlay/card customizado em vez de react-modal para consistência visual
 
-const GerenciarGrupos = () => {
+const ManageGroups = () => {
 	const [grupos, setGrupos] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [message, setMessage] = useState('');
@@ -617,4 +617,4 @@ const GerenciarGrupos = () => {
 	);
 };
 
-export default GerenciarGrupos;
+export default ManageGroups;

@@ -4,7 +4,7 @@ import Modal from 'react-modal';
 import { ReactComponent as IfsulLogoWhite } from '../assets/ifsul-logo-white.svg';
 import '../App.css';
 import { FaEdit, FaTrashAlt, FaPlus, FaSearch, FaCalendarPlus, FaUserPlus, FaUsers, FaUserShield, FaSignOutAlt, FaThLarge } from 'react-icons/fa';
-import { Evento } from './Evento';
+import { Event } from './Event';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 
@@ -620,7 +620,7 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
                   blocos = blocos.concat(currentEventos
                     .filter(evento => evento.titulo !== 'Placeholder')
                     .map((evento, index) => (
-                      <Evento key={`evento-${index}`} evento={evento} isAdmin={isAdmin} openModal={openModal} />
+                      <Event key={`evento-${index}`} evento={evento} isAdmin={isAdmin} openModal={openModal} />
                     )));
                 }
                 // Preencher a grade com espaços reservados para manter o layout
