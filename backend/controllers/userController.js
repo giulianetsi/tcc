@@ -320,6 +320,5 @@ module.exports = {
   getProfile,
   updateProfile,
   changePassword,
-  notificationDecision,
   removeInvalidSubscriptions
 };
