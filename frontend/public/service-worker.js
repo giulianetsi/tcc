@@ -147,7 +147,13 @@ self.addEventListener('push', function(event) {
     };
 
     console.log('Exibindo notificação:', data.title, options);
-    return self.registration.showNotification(data.title || 'Notificação', options);
+    try {
+      await self.registration.showNotification(data.title || 'Notificação', options);
+      console.log('Notificação exibida com sucesso');
+    } catch (showErr) {
+      console.error('Erro ao exibir notificação:', showErr);
+      console.error('Permissão atual:', await self.registration.pushManager.permissionState ? await self.registration.pushManager.permissionState({ userVisibleOnly: true }) : 'unknown');
+    }
   })());
 });
 

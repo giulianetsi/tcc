@@ -272,32 +272,6 @@ const loginUser = async (req, res) => {
 const logoutUser = async (req, res) => {
   console.log('logoutUser: chamada recebida', { ip: req.ip, origin: req.headers.origin, userAgent: req.headers['user-agent'] });
   console.log('logoutUser: body recebido:', req.body);
-  // Tentar identificar o token (Authorization header ou cookie) e gravar seu jti em revoked_tokens
-  try {
-    const authHeader = req.headers['authorization'];
-    const token = (authHeader && authHeader.split(' ')[1]) || (req.cookies && req.cookies.token);
-    if (token) {
-      try {
-        const jwtSecret = process.env.JWT_SECRET || 'your_jwt_secret';
-        const decoded = jwt.verify(token, jwtSecret);
-        const jti = decoded.jti || null;
-        if (jti && decoded.exp) {
-          const expiresAt = new Date(decoded.exp * 1000).toISOString().slice(0, 19).replace('T', ' ');
-          try {
-            console.log('logoutUser: revogando token jti=', jti, 'userId=', decoded.userId || null, 'exp=', expiresAt);
-            await userModel.revokeToken(jti, expiresAt, decoded.userId || null, 'logout');
-          } catch (e) {
-            console.warn('Could not revoke token via model:', e && e.message ? e.message : e);
-          }
-        }
-      } catch (verifyErr) {
-        // token inválido, apenas continuar
-        console.warn('logoutUser: token verify failed:', verifyErr && verifyErr.message ? verifyErr.message : verifyErr);
-      }
-    }
-  } catch (err) {
-    console.warn('logoutUser: unexpected error when trying to revoke token:', err && err.message ? err.message : err);
-  }
 
   // se for enviado endpoint no corpo, remover subscription relacionada
   try {
