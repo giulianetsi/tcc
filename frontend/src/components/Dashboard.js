@@ -603,9 +603,9 @@ const Dashboard = ({ username, eventos: eventosProp = [], isAdmin: isAdminProp }
                 if (canAddEvent) {
                     blocos.push(
                       <div
-                        key="add-evento"
+                        key="add-event"
                         className="event-card event-card-add event-card-add-large"
-                        onClick={() => navigate('/add-evento')}
+                        onClick={() => navigate('/add-event')}
                         style={{ cursor: 'pointer' }}
                       >
                         <div className="add-event-content" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>

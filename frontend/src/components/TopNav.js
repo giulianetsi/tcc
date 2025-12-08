@@ -130,7 +130,7 @@ const TopNav = () => {
                 const perms = JSON.parse(permsStr);
                 if (perms.canCreateEvent) {
                   return (
-                    <button className={isActive('/add-evento') ? 'nav-item active' : 'nav-item'} onClick={() => { navigate('/add-evento'); setMenuOpen(false); }}>
+                    <button className={isActive('/add-event') ? 'nav-item active' : 'nav-item'} onClick={() => { navigate('/add-event'); setMenuOpen(false); }}>
                       <FaCalendarPlus className="nav-icon" />
                       <span>Adicionar Evento</span>
                     </button>
