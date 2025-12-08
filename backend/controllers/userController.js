@@ -310,20 +310,6 @@ const logoutUser = async (req, res) => {
   res.clearCookie('token');
   res.status(200).json({ message: 'Logout bem-sucedido' });
 };
-// Registrar decisão do usuário sobre notificações (granted/denied/default)
-const notificationDecision = async (req, res) => {
-  const { user_id, decision } = req.body; // decision: 'granted' | 'denied' | 'default'
-
-  if (!user_id || !decision) return res.status(400).json({ message: 'user_id e decision requeridos' });
-
-  try {
-    await userModel.upsertNotificationDecision(user_id, decision);
-    res.status(200).json({ message: 'Decisão de notificação registrada' });
-  } catch (error) {
-    console.error('Erro ao registrar decisão:', error.message);
-    res.status(500).json({ message: 'Erro ao registrar decisão', error: error.message });
-  }
-};
 
 module.exports = {
   registerUser,

@@ -86,17 +86,19 @@ const UserProfile = () => {
           const sub = subscription.toJSON();
           
           await api.post('/users/subscribe', { endpoint: sub.endpoint, keys: sub.keys, user_id: parseInt(userId) });
-          await api.post('/users/notification-decision', { user_id: parseInt(userId), decision: 'granted' });
           
           setMessage('Notificações habilitadas com sucesso.');
           setMessageType('success');
           setTimeout(() => setMessage(''), 5000);
         }
       } else {
-        await api.post('/users/notification-decision', { user_id: parseInt(userId), decision: 'denied' });
         const registration = await navigator.serviceWorker.getRegistration();
         const subscription = await registration?.pushManager.getSubscription();
-        await subscription?.unsubscribe();
+        
+        if (subscription) {
+          await api.post('/users/unsubscribe', { endpoint: subscription.endpoint });
+          await subscription.unsubscribe();
+        }
         
         setMessage('Notificações desabilitadas. Para bloquear completamente, clique no ícone de cadeado na barra de endereço e altere a permissão de notificações para "Bloquear".');
         setMessageType('warning');

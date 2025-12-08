@@ -23,7 +23,7 @@ async function getEligibleSubscriptionsForEvent(eventId) {
   const [egs] = await db.execute('SELECT group_id FROM event_groups WHERE event_id = ?', [eventId]);
   const eventGroupIds = egs.map(r => Number(r.group_id));
 
-  // Carregar subscrições com info de usuário (excluir decision: que são apenas marcadores)
+  // Carregar subscrições com info de usuário
   const [subscriptions] = await db.execute(`
     SELECT s.endpoint, s.keys_p256dh, s.keys_auth, s.user_id,
            ut.id AS user_type_id, p.can_receive_notifications,
@@ -33,26 +33,10 @@ async function getEligibleSubscriptionsForEvent(eventId) {
     LEFT JOIN user_types ut ON u.user_type_id = ut.id
     LEFT JOIN permissions p ON ut.id = p.user_type_id
     LEFT JOIN user_groups ug ON ug.user_id = u.id
-    WHERE s.endpoint NOT LIKE 'decision:%'
     GROUP BY s.endpoint, s.keys_p256dh, s.keys_auth, s.user_id, ut.id, p.can_receive_notifications
   `);
 
   if (!subscriptions?.length) return [];
-
-  // Carregar decisões explícitas do usuário (denied/granted armazenadas em subscriptions com endpoint=decision:user_id)
-  const userIds = subscriptions.map(s => s.user_id);
-  const decisionEndpoints = userIds.map(id => `decision:${id}`);
-  const placeholders = decisionEndpoints.map(() => '?').join(',');
-  const [decRows] = await db.execute(
-    `SELECT endpoint, keys_p256dh FROM subscriptions WHERE endpoint IN (${placeholders})`,
-    decisionEndpoints
-  );
-
-  const userDecisions = new Map();
-  decRows.forEach(row => {
-    const userId = Number(row.endpoint.replace('decision:', ''));
-    userDecisions.set(userId, String(row.keys_p256dh));
-  });
 
   // Converter tipos de usuário para IDs numéricos
   let allowedTypeIds = new Set();
@@ -90,25 +74,21 @@ async function getEligibleSubscriptionsForEvent(eventId) {
   const eligible = [];
 
   for (const sub of subscriptions) {
-    // 1. Verificar decisão explícita do usuário (se negou, pula)
-    const decision = userDecisions.get(sub.user_id);
-    if (decision === 'denied') continue;
-
-    // 2. Verificar permissão geral (se pode receber, continua; senão, pula)
+    // 1. Verificar permissão geral (se pode receber, continua; senão, pula)
     if (!sub.can_receive_notifications) continue;
 
-    // 3. Sem filtros = aceita todos
+    // 2. Sem filtros = aceita todos
     if (!hasTypeFilter && !hasGroupFilter) {
       eligible.push({ endpoint: sub.endpoint, keys_p256dh: sub.keys_p256dh, keys_auth: sub.keys_auth, user_id: sub.user_id });
       continue;
     }
 
-    // 4. Filtro de tipo
+    // 3. Filtro de tipo
     if (hasTypeFilter && !allowedTypeIds.has(Number(sub.user_type_id))) {
       continue;
     }
 
-    // 5. Filtro de grupos
+    // 4. Filtro de grupos
     if (hasGroupFilter) {
       const userGroups = sub.user_group_ids ? sub.user_group_ids.split(',').map(Number) : [];
       const matches = groupsCombined

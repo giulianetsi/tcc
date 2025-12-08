@@ -10,7 +10,6 @@ router.post('/login', loginUser);
 router.post('/logout', logoutUser);
 router.post('/subscribe', subscribe);
 router.post('/unsubscribe', unsubscribe);
-router.post('/notification-decision', require('../controllers/userController').notificationDecision);
 
 // Rota de debug: retorna o conteúdo do token decodificado (req.user)
 router.get('/debug/me', authenticateToken, (req, res) => {

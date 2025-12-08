@@ -139,17 +139,6 @@ async function listSubscriptions({ httpOnly = false } = {}) {
   return rows;
 }
 
-async function upsertNotificationDecision(user_id, decision) {
-  const decisionKey = `decision:${user_id}`;
-  const [existing] = await db.execute('SELECT * FROM subscriptions WHERE endpoint = ?', [decisionKey]);
-  if (existing && existing.length > 0) {
-    await db.execute('UPDATE subscriptions SET keys_p256dh = ?, keys_auth = ? WHERE endpoint = ?', [decision, decision, decisionKey]);
-    return { updated: true };
-  }
-  await db.execute('INSERT INTO subscriptions (endpoint, keys_p256dh, keys_auth, user_id) VALUES (?, ?, ?, ?)', [decisionKey, decision, decision, user_id]);
-  return { inserted: true };
-}
-
 async function createUser(data) {
   // Espera um objeto com fields: first_name,last_name,email,phone,birth_date,password,cpf,userType,registration_number,className,courses,relationship,student_cpf,selectedGroups,createdBy
   const {
@@ -234,5 +223,4 @@ async function createUser(data) {
 module.exports.addSubscription = addSubscription;
 module.exports.removeSubscription = removeSubscription;
 module.exports.listSubscriptions = listSubscriptions;
-module.exports.upsertNotificationDecision = upsertNotificationDecision;
 module.exports.createUser = createUser;
