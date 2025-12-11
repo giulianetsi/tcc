@@ -11,6 +11,17 @@ const ManagePermissions = () => {
   const [originalRows, setOriginalRows] = useState([]);
   const navigate = useNavigate();
 
+  // Proteger: apenas admin (user_type_id === 1) pode acessar
+  useEffect(() => {
+    const userTypeId = localStorage.getItem('user_type_id');
+    const userType = localStorage.getItem('user_type');
+    const isAdmin = (userTypeId && Number(userTypeId) === 1) || userType === 'admin';
+    if (!isAdmin) {
+      navigate('/');
+      return;
+    }
+  }, [navigate]);
+
   // Mapear os valores de user_type do banco de dados para rótulos legíveis em português
   const USER_TYPE_LABELS = {
     // Portuguese
