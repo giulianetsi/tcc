@@ -15,7 +15,7 @@ async function authenticate(login, senha) {
     // Usar LOWER(TRIM(u.email)) = ? para garantir comparação case-insensitive e sem espaços
     const [rows] = await db.execute(`
       SELECT u.id, u.first_name, u.last_name, u.password, ut.id as user_type_id, ut.name as user_type,
-             p.can_create_event, p.can_view_all_events, p.can_receive_notifications, p.can_create_user
+             p.can_create_event, p.can_view_all_events, p.can_receive_notifications, p.can_create_user, p.can_manage_groups
       FROM users u
       LEFT JOIN user_types ut ON u.user_type_id = ut.id
       LEFT JOIN permissions p ON ut.id = p.user_type_id
@@ -63,7 +63,8 @@ async function authenticate(login, senha) {
         canCreateEvent: Boolean(u.can_create_event),
         canViewAllEvents: Boolean(u.can_view_all_events),
         canReceiveNotifications: Boolean(u.can_receive_notifications),
-        canCreateUser: Boolean(u.can_create_user)
+        canCreateUser: Boolean(u.can_create_user),
+        canManageGroups: Boolean(u.can_manage_groups)
       }
     };
   } catch (err) {

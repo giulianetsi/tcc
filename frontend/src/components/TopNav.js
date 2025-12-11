@@ -68,7 +68,7 @@ const TopNav = () => {
             const permsStr = localStorage.getItem('permissions');
             if (permsStr) {
               const perms = JSON.parse(permsStr);
-              if (perms.canCreateEvent) {
+              if (perms.canCreateEvent || perms.can_create_event) {
                 return (
                   <button onClick={() => navigate('/add-event')} className={isActive('/add-event') ? 'topnav-btn active' : 'topnav-btn'} style={{ background: 'none', border: 'none', color: 'white', textDecoration: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', margin: '0 10px' }}>
                     Adicionar Evento
@@ -81,22 +81,19 @@ const TopNav = () => {
         })()}
 
         {(() => {
-          const userTypeId = localStorage.getItem('user_type_id');
-          const userType = localStorage.getItem('user_type');
           let canCreateUser = false;
-          try { const permsStr = localStorage.getItem('permissions'); if (permsStr) { const perms = JSON.parse(permsStr); canCreateUser = Boolean(perms.canCreateUser || perms.can_create_user); } } catch (e) { console.warn('Erro ao ler permissões do localStorage:', e); }
-          const isAdminUser = (userTypeId && Number(userTypeId) === 1) || userType === 'admin';
-            if (isAdminUser) {
-            return (
-              <>
-                <button onClick={() => navigate('/register-user')} className={isActive('/register-user') ? 'topnav-btn active' : 'topnav-btn'} style={{ background: 'none', border: 'none', color: 'white', textDecoration: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', margin: '0 10px' }}>Registrar Usuário</button>
-                <button onClick={() => navigate('/gerenciar-grupos')} className={isActive('/gerenciar-grupos') ? 'topnav-btn active' : 'topnav-btn'} style={{ background: 'none', border: 'none', color: 'white', textDecoration: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', margin: '0 10px' }}>Gerenciar Grupos</button>
-                <button onClick={() => navigate('/manage-permissions')} className={isActive('/manage-permissions') ? 'topnav-btn active' : 'topnav-btn'} style={{ background: 'none', border: 'none', color: 'white', textDecoration: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', margin: '0 10px' }}>Gerenciar Permissões</button>
-              </>
-            );
-          }
+          let canManageGroups = false;
+          let isAdminUser = false;
+          try { const permsStr = localStorage.getItem('permissions'); if (permsStr) { const perms = JSON.parse(permsStr); canCreateUser = Boolean(perms.canCreateUser || perms.can_create_user); canManageGroups = Boolean(perms.canManageGroups || perms.can_manage_groups); } } catch (e) { console.warn('Erro ao ler permissões do localStorage:', e); }
+          try { const userTypeId = localStorage.getItem('user_type_id'); const userType = localStorage.getItem('user_type'); isAdminUser = (userTypeId && Number(userTypeId) === 1) || userType === 'admin'; } catch (e) { console.warn('Erro ao verificar admin:', e); }
           if (canCreateUser) {
             return (<button onClick={() => navigate('/register-user')} className={isActive('/register-user') ? 'topnav-btn active' : 'topnav-btn'} style={{ background: 'none', border: 'none', color: 'white', textDecoration: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', margin: '0 10px' }}>Registrar Usuário</button>);
+          }
+          if (canManageGroups) {
+            return (<button onClick={() => navigate('/gerenciar-grupos')} className={isActive('/gerenciar-grupos') ? 'topnav-btn active' : 'topnav-btn'} style={{ background: 'none', border: 'none', color: 'white', textDecoration: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', margin: '0 10px' }}>Gerenciar Grupos</button>);
+          }
+          if (isAdminUser) {
+            return (<button onClick={() => navigate('/manage-permissions')} className={isActive('/manage-permissions') ? 'topnav-btn active' : 'topnav-btn'} style={{ background: 'none', border: 'none', color: 'white', textDecoration: 'none', cursor: 'pointer', fontSize: 'inherit', fontFamily: 'inherit', margin: '0 10px' }}>Gerenciar Permissões</button>);
           }
           return null;
         })()}
@@ -142,31 +139,19 @@ const TopNav = () => {
           })()}
 
           {(() => {
-            const userTypeId = localStorage.getItem('user_type_id');
-            const userType = localStorage.getItem('user_type');
             let canCreateUser = false;
-            try { const permsStr = localStorage.getItem('permissions'); if (permsStr) { const perms = JSON.parse(permsStr); canCreateUser = Boolean(perms.canCreateUser || perms.can_create_user); } } catch {}
-            const isAdminUser = (userTypeId && Number(userTypeId) === 1) || userType === 'admin';
-            if (isAdminUser) {
-              return (
-                <>
-                  <button className={isActive('/register-user') ? 'nav-item active' : 'nav-item'} onClick={() => { navigate('/register-user'); setMenuOpen(false); }}>
-                    <FaUserPlus className="nav-icon" />
-                    <span>Registrar Usuário</span>
-                  </button>
-                  <button className={isActive('/gerenciar-grupos') ? 'nav-item active' : 'nav-item'} onClick={() => { navigate('/gerenciar-grupos'); setMenuOpen(false); }}>
-                    <FaUsers className="nav-icon" />
-                    <span>Gerenciar Grupos</span>
-                  </button>
-                  <button className={isActive('/manage-permissions') ? 'nav-item active' : 'nav-item'} onClick={() => { navigate('/manage-permissions'); setMenuOpen(false); }}>
-                    <FaUserShield className="nav-icon" />
-                    <span>Gerenciar Permissões</span>
-                  </button>
-                </>
-              );
-            }
+            let canManageGroups = false;
+            let isAdminUser = false;
+            try { const permsStr = localStorage.getItem('permissions'); if (permsStr) { const perms = JSON.parse(permsStr); canCreateUser = Boolean(perms.canCreateUser || perms.can_create_user); canManageGroups = Boolean(perms.canManageGroups || perms.can_manage_groups); } } catch {}
+            try { const userTypeId = localStorage.getItem('user_type_id'); const userType = localStorage.getItem('user_type'); isAdminUser = (userTypeId && Number(userTypeId) === 1) || userType === 'admin'; } catch {}
             if (canCreateUser) {
               return (<button className={isActive('/register-user') ? 'nav-item active' : 'nav-item'} onClick={() => { navigate('/register-user'); setMenuOpen(false); }}><FaUserPlus className="nav-icon" /><span>Registrar Usuário</span></button>);
+            }
+            if (canManageGroups) {
+              return (<button className={isActive('/gerenciar-grupos') ? 'nav-item active' : 'nav-item'} onClick={() => { navigate('/gerenciar-grupos'); setMenuOpen(false); }}><FaUsers className="nav-icon" /><span>Gerenciar Grupos</span></button>);
+            }
+            if (isAdminUser) {
+              return (<button className={isActive('/manage-permissions') ? 'nav-item active' : 'nav-item'} onClick={() => { navigate('/manage-permissions'); setMenuOpen(false); }}><FaUserShield className="nav-icon" /><span>Gerenciar Permissões</span></button>);
             }
             return null;
           })()}

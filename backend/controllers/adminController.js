@@ -12,17 +12,18 @@ const listPermissions = async (req, res) => {
 };
 
 // Atualizar (ou inserir) permissões para um dado user_type_id
-// Recebe flags no body como canCreateEvent, canViewAllEvents, canReceiveNotifications, canCreateUser
+// Recebe flags no body como canCreateEvent, canViewAllEvents, canReceiveNotifications, canCreateUser, canManageGroups
 const updatePermissions = async (req, res) => {
   const { user_type_id } = req.params;
-  const { canCreateEvent, canViewAllEvents, canReceiveNotifications, canCreateUser } = req.body;
+  const { canCreateEvent, canViewAllEvents, canReceiveNotifications, canCreateUser, canManageGroups } = req.body;
 
   try {
     const result = await adminModel.updatePermissions(user_type_id, {
       can_create_event: canCreateEvent,
       can_view_all_events: canViewAllEvents,
       can_receive_notifications: canReceiveNotifications,
-      can_create_user: canCreateUser
+      can_create_user: canCreateUser,
+      can_manage_groups: canManageGroups
     });
 
     if (result && result.changes && Object.keys(result.changes).length > 0) {

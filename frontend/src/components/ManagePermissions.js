@@ -55,6 +55,8 @@ const ManagePermissions = () => {
     const parts = [];
     if (r.can_create_event) parts.push('Criar eventos');
     if (r.can_view_all_events) parts.push('Ver todos os eventos');
+    if (r.can_create_user) parts.push('Registrar usuários');
+    if (r.can_manage_groups) parts.push('Gerenciar grupos');
     if (r.can_receive_notifications) parts.push('Receber notificações');
     if (parts.length === 0) return 'Nenhuma permissão ativa';
     return parts.join(' · ');
@@ -74,7 +76,8 @@ const ManagePermissions = () => {
     return (
       Number(orig.can_create_event) !== Number(row.can_create_event) ||
       Number(orig.can_view_all_events) !== Number(row.can_view_all_events) ||
-      Number(orig.can_create_user) !== Number(row.can_create_user)
+      Number(orig.can_create_user) !== Number(row.can_create_user) ||
+      Number(orig.can_manage_groups) !== Number(row.can_manage_groups)
     );
   };
 
@@ -93,7 +96,8 @@ const ManagePermissions = () => {
         canCreateEvent: !!row.can_create_event,
         canViewAllEvents: !!row.can_view_all_events,
         canReceiveNotifications: !!canReceiveNotifications,
-        canCreateUser: !!row.can_create_user
+        canCreateUser: !!row.can_create_user,
+        canManageGroups: !!row.can_manage_groups
       });
       setMessage('Permissões salvas');
       // update original snapshot for this row so Save disables
@@ -151,6 +155,10 @@ const ManagePermissions = () => {
                             <input className="form-check-input" type="checkbox" id={`ccu-${r.user_type_id}`} checked={!!r.can_create_user} onChange={() => toggle(idx, 'can_create_user')} />
                             <label className="form-check-label small ms-2 d-none d-md-inline" htmlFor={`ccu-${r.user_type_id}`}>Registrar usuários</label>
                           </div>
+                          <div className="form-check form-switch">
+                            <input className="form-check-input" type="checkbox" id={`cmg-${r.user_type_id}`} checked={!!r.can_manage_groups} onChange={() => toggle(idx, 'can_manage_groups')} />
+                            <label className="form-check-label small ms-2 d-none d-md-inline" htmlFor={`cmg-${r.user_type_id}`}>Gerenciar grupos</label>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -171,6 +179,7 @@ const ManagePermissions = () => {
             <ul>
               <li><strong>Criar eventos</strong>: Permite criar novos eventos para o tipo de usuário.</li>
               <li><strong>Criar usuários</strong>: Permite que o tipo de usuário registre novos usuários no sistema.</li>
+              <li><strong>Gerenciar grupos</strong>: Permite que o tipo de usuário gerencie grupos (criar, editar, atribuir membros).</li>
               <li><strong>Ver todos os eventos</strong>: Permite visualizar eventos de outros grupos/usuários.</li>
             </ul>
           </div>

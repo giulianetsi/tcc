@@ -6,7 +6,7 @@ const router = express.Router();
 
 router.post('/add-event', authenticateToken, checkPermission('canCreateEvent'), addEvent);
 router.get('/', authenticateToken, getEvents);
-router.put('/:id', authenticateToken, updateEvent);
-router.delete('/:id', authenticateToken, deleteEvent);
+router.put('/:id', authenticateToken, checkPermission('canCreateEvent'), updateEvent);
+router.delete('/:id', authenticateToken, checkPermission('canCreateEvent'), deleteEvent);
 
 module.exports = router;

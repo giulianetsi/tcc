@@ -413,13 +413,13 @@ async function createEvent(data, reqUser) {
                 const pushSubscription = { endpoint: sub.endpoint, keys: { p256dh: sub.keys_p256dh, auth: sub.keys_auth } };
                 try {
                   await webpush.sendNotification(pushSubscription, payload);
-                  console.log('[eventModel] ✅ SUCCESS for user:', sub.user_id);
+                  console.log('[eventModel] SUCCESS for user:', sub.user_id);
                 } catch (err) {
                   if (err && err.statusCode === 410) {
                     console.log('[eventModel] 410 expired, removing for user:', sub.user_id);
                     try { await db.execute('DELETE FROM subscriptions WHERE endpoint = ?', [sub.endpoint]); } catch (delErr) { /* ignore */ }
                   } else {
-                    console.error('[eventModel] ❌ ERROR for user:', sub.user_id);
+                    console.error('[eventModel] ERROR for user:', sub.user_id);
                     console.error('  statusCode:', err.statusCode);
                     console.error('  body:', err.body);
                     console.error('  message:', err.message);
@@ -509,7 +509,8 @@ async function updateEvent(eventId, data, reqUser) {
   if (!rows || rows.length === 0) throw Object.assign(new Error('Evento não encontrado'), { status: 404 });
   const ownerId = rows[0].user_id;
   const userId = reqUser?.userId;
-  const isAdmin = Boolean(reqUser?.permissions && (reqUser.permissions.canViewAllEvents || reqUser.permissions.can_create_user || reqUser.permissions.canCreateUser)) || reqUser?.userTypeId === 1 || String(reqUser?.userType).toLowerCase() === 'admin';
+  // Considerar admin se: user_type_id === 1 OU possui permissão canCreateEvent (pode ser equivalente a admin)
+  const isAdmin = (reqUser?.userTypeId === 1) || (reqUser?.permissions && (reqUser.permissions.canCreateEvent || reqUser.permissions.can_create_event));
   if (Number(ownerId) !== Number(userId) && !isAdmin) throw Object.assign(new Error('Apenas o criador ou administrador pode editar este evento'), { status: 403 });
 
   // executar update -- montar dinamicamente as colunas recebidas para evitar erros quando colunas inexistentes
@@ -586,13 +587,13 @@ async function updateEvent(eventId, data, reqUser) {
             const pushSubscription = { endpoint: sub.endpoint, keys: { p256dh: sub.keys_p256dh, auth: sub.keys_auth } };
             try {
               await webpush.sendNotification(pushSubscription, payload);
-              console.log('[eventModel] UPDATE ✅ SUCCESS for user:', sub.user_id);
+              console.log('[eventModel] UPDATE SUCCESS for user:', sub.user_id);
             } catch (err) {
               if (err && err.statusCode === 410) {
                 console.log('[eventModel] UPDATE 410 expired, removing for user:', sub.user_id);
                 try { await db.execute('DELETE FROM subscriptions WHERE endpoint = ?', [sub.endpoint]); } catch(e){}
               } else {
-                console.error('[eventModel] UPDATE ❌ ERROR for user:', sub.user_id);
+                console.error('[eventModel] UPDATE ERROR for user:', sub.user_id);
                 console.error('  statusCode:', err.statusCode);
                 console.error('  body:', err.body);
                 console.error('  message:', err.message);
@@ -677,22 +678,12 @@ async function deleteEvent(eventId, reqUser) {
     }
     const event = evRows[0];
 
-    // verificar permissão: primeiro verificar flag em permissions (can_delete_events) se existir
-    let allowed = false;
-    try {
-      const [permRows] = await connection.execute('SELECT p.can_delete_events FROM users u JOIN user_types ut ON u.user_type_id = ut.id JOIN permissions p ON ut.id = p.user_type_id WHERE u.id = ? LIMIT 1', [userId]);
-      if (permRows && permRows.length > 0) {
-        const v = permRows[0].can_delete_events;
-        if (v === 1 || v === '1' || v === true || v === 'true') allowed = true;
-      }
-    } catch (e) {
-      // ignore and fallback to creator check
-    }
-
-    if (!allowed) {
-      // permitir se for o criador
-      if (Number(event.user_id) === Number(userId)) allowed = true;
-    }
+    // Permitir delete se: 1) é o criador OU 2) tem canCreateEvent (equivalente a permissão)
+    const isCreator = Number(event.user_id) === Number(userId);
+    const hasCreateEventPerm = reqUser?.permissions && (reqUser.permissions.canCreateEvent || reqUser.permissions.can_create_event);
+    const isAdmin = reqUser?.userTypeId === 1;
+    
+    const allowed = isCreator || hasCreateEventPerm || isAdmin;
 
     if (!allowed) {
       const err = new Error('Permissão negada para deletar o evento');

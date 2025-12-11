@@ -133,7 +133,8 @@ CREATE TABLE `permissions` (
   `can_create_event` tinyint(1) DEFAULT '0',
   `can_view_all_events` tinyint(1) DEFAULT '0',
   `can_receive_notifications` tinyint(1) DEFAULT '1',
-  `can_create_user` tinyint(1) DEFAULT '0'
+  `can_create_user` tinyint(1) DEFAULT '0',
+  `can_manage_groups` tinyint(1) DEFAULT '0'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --

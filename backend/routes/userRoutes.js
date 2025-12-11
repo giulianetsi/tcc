@@ -1,11 +1,11 @@
 const express = require('express');
 const { registerUser, loginUser, logoutUser, subscribe, unsubscribe, getProfile, updateProfile, changePassword } = require('../controllers/userController');
-const { authenticateToken, requireAdmin, allowCreateUser } = require('../middleware/auth');
+const { authenticateToken, checkPermission } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Admins OR any user_type with canCreateUser permission podem registrar novos usuários
-router.post('/register-user', authenticateToken, allowCreateUser, registerUser);
+// Requer permissão canCreateUser para registrar novos usuários
+router.post('/register-user', authenticateToken, checkPermission('canCreateUser'), registerUser);
 router.post('/login', loginUser);
 router.post('/logout', logoutUser);
 router.post('/subscribe', subscribe);
