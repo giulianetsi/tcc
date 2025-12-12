@@ -10,7 +10,6 @@ import GroupMembers from './components/GroupMembers';
 import ManagePermissions from './components/ManagePermissions';
 import UserProfile from './components/UserProfile';
 import './App.css';
-import IosInstallHint from './components/IosInstallHint';
 import TopNav from './components/TopNav';
 import { useLocation } from 'react-router-dom';
 import PrivateRoute from './components/PrivateRoute';
@@ -123,7 +122,6 @@ function AppInner() {
           .app-btn--primary-shape { width: 100%; min-width: 0; }
         }
       `}</style>
-      <IosInstallHint />
       {showTopNav && <TopNav />}
       <Routes>
             <Route path="/login" element={<Login />} />
