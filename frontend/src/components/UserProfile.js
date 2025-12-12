@@ -188,8 +188,16 @@ const UserProfile = () => {
   };
 
   const changePassword = async () => {
-    if (!pwd.currentPassword || !pwd.newPassword) return setMessage('Preencha todas as senhas.');
-    if (pwd.newPassword !== pwd.confirmPassword) return setMessage('A nova senha e a confirmação não coincidem.');
+    if (!pwd.currentPassword || !pwd.newPassword) {
+      setMessage('Preencha todos os campos.');
+      setMessageType('warning');
+      return;
+    }
+    if (pwd.newPassword !== pwd.confirmPassword) {
+      setMessage('A nova senha e a confirmação não coincidem.');
+      setMessageType('warning');
+      return;
+    }
     try {
       setMessage('');
       await api.post('/users/change-password', {
@@ -197,11 +205,16 @@ const UserProfile = () => {
         newPassword: pwd.newPassword
       });
       setMessage('Senha alterada com sucesso.');
+      setMessageType('success');
       setPwd({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err) {
       console.error('Erro ao alterar senha:', err);
-      if (err && err.response && err.response.data && err.response.data.message) setMessage(err.response.data.message);
-      else setMessage('Erro ao alterar senha.');
+      if (err && err.response && err.response.data && err.response.data.message) {
+        setMessage(err.response.data.message);
+      } else {
+        setMessage('Erro ao alterar senha.');
+      }
+      setMessageType('danger');
     }
   };
 
