@@ -78,7 +78,15 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    // Notificar o servidor sobre o logout
+    try {
+      await api.post('/users/logout');
+    } catch (e) {
+      // Continuar mesmo se falhar
+      console.log('Aviso: erro ao notificar servidor do logout', e?.message);
+    }
+    
     console.log('Usuário deslogado - limpando todos os dados de sessão');
     
     // Obter user_id antes de limpar para limpar decisão de notificação específica
