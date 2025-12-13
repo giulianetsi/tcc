@@ -66,15 +66,57 @@ function toUtcSqlDatetime(input) {
   }
 }
 
-/**
- * Retorna linhas brutas de eventos visíveis para o usuário fornecido.
- * Recebe o objeto decodificado do token (req.user) ou um userId numérico.
- * Retorna um objeto: { events: Array, effectiveUserId }
- */
-async function getEventsForUser(reqUser) {
-  const userId = (reqUser && reqUser.userId) || reqUser;
+// Helpers para reduzir duplicação e manter a mesma lógica
+const normalizeBool = (val) => (val === 1 || val === '1' || val === true || String(val).toLowerCase() === 'true');
 
-  // comportamento idêntico ao original em eventoController.getEventos
+const selectBase = (includeTarget = true) => `
+  SELECT DISTINCT e.*, 
+         CONCAT(u.first_name, ' ', u.last_name) as created_by,
+         ut.name as creator_type,
+         GROUP_CONCAT(DISTINCT g.name) as grupos
+         ${includeTarget ? ', e.target_user_types' : ''}
+  FROM events e
+  LEFT JOIN users u ON e.user_id = u.id
+  LEFT JOIN user_types ut ON u.user_type_id = ut.id
+  LEFT JOIN event_groups eg ON e.id = eg.event_id
+  LEFT JOIN \`groups\` g ON eg.group_id = g.id
+`;
+
+const groupsFilter = `(
+  (
+    (e.groups_combined = 0 
+     AND (
+       NOT EXISTS (
+         SELECT 1 FROM event_groups eg0 WHERE eg0.event_id = e.id
+       )
+       OR e.id IN (
+         SELECT DISTINCT eg2.event_id 
+         FROM event_groups eg2
+         JOIN user_groups ug ON eg2.group_id = ug.group_id
+         WHERE ug.user_id = ?
+       )
+     ))
+    OR
+    (e.groups_combined = 1
+     AND e.id IN (
+       SELECT eg3.event_id
+       FROM event_groups eg3
+       WHERE eg3.event_id NOT IN (
+         SELECT DISTINCT eg4.event_id
+         FROM event_groups eg4
+         WHERE eg4.group_id NOT IN (
+           SELECT ug2.group_id
+           FROM user_groups ug2
+           WHERE ug2.user_id = ?
+         )
+       )
+     ))
+  )
+)`;
+
+async function resolveEffectiveUser(reqUser) {
+  const userId = reqUser?.userId || reqUser;
+
   const [userInfo] = await db.execute(`
     SELECT ut.name as user_type, p.can_view_all_events
     FROM users u 
@@ -89,16 +131,11 @@ async function getEventsForUser(reqUser) {
     throw err;
   }
 
-  const userType = userInfo[0].user_type;
-  // Respeitar o valor vindo do banco para `can_view_all_events`.
-  // Aceitar valores 1/'1'/true/'true' como verdadeiro; caso contrário, falsy.
-  const rawCanViewAll = userInfo[0].can_view_all_events;
-  let canViewAll = (rawCanViewAll === 1 || rawCanViewAll === '1' || rawCanViewAll === true || String(rawCanViewAll).toLowerCase() === 'true');
-
   let effectiveUserId = userId;
-  let effectiveUserType = userType;
+  let effectiveUserType = userInfo[0].user_type;
   try {
-    if (String(userType).toLowerCase() === 'responsavel' || String(userType).toLowerCase() === 'guardian') {
+    const typeLower = String(effectiveUserType).toLowerCase();
+    if (typeLower === 'responsavel' || typeLower === 'guardian') {
       const [guardRows] = await db.execute('SELECT student_id FROM guardians WHERE guardian_id = ?', [userId]);
       if (guardRows && guardRows.length > 0) {
         effectiveUserId = guardRows[0].student_id;
@@ -106,108 +143,66 @@ async function getEventsForUser(reqUser) {
         if (stuRows && stuRows.length > 0) effectiveUserType = stuRows[0].user_type;
       }
     }
-  } catch (guardErr) {
-    // ignorar e continuar com o usuário original
-  }
+  } catch (e) { /* manter original se falhar */ }
 
+  return {
+    effectiveUserId,
+    effectiveUserType,
+    canViewAll: normalizeBool(userInfo[0].can_view_all_events)
+  };
+}
+
+function buildTypeFilter(effectiveUserType) {
+  const typeMap = {
+    'aluno': ['aluno', 'student'],
+    'professor': ['professor', 'teacher'],
+    'responsavel': ['responsavel', 'guardian'],
+    'admin': ['admin']
+  };
+  const variants = typeMap[effectiveUserType] || [effectiveUserType];
+  const likeParams = variants.map(v => `%${String(v).toLowerCase()}%`);
+  const containsClauses = variants.map(() => "LOWER(COALESCE(e.target_user_types,'')) LIKE ?").join(' OR ');
+  return { variants, likeParams, containsClauses };
+}
+
+/**
+ * Retorna linhas brutas de eventos visíveis para o usuário fornecido.
+ * Recebe o objeto decodificado do token (req.user) ou um userId numérico.
+ * Retorna um objeto: { events: Array, effectiveUserId }
+ */
+async function getEventsForUser(reqUser) {
+  const { effectiveUserId, effectiveUserType, canViewAll } = await resolveEffectiveUser(reqUser);
   let query;
   let params = [];
 
   if (canViewAll) {
-    query = `
-      SELECT DISTINCT e.*, 
-             CONCAT(u.first_name, ' ', u.last_name) as created_by,
-             ut.name as creator_type,
-             GROUP_CONCAT(DISTINCT g.name) as grupos,
-             e.target_user_types
-      FROM events e
-      LEFT JOIN users u ON e.user_id = u.id
-      LEFT JOIN user_types ut ON u.user_type_id = ut.id
-      LEFT JOIN event_groups eg ON e.id = eg.event_id
-      LEFT JOIN \`groups\` g ON eg.group_id = g.id
+    query = `${selectBase(true)}
       GROUP BY e.id
-      ORDER BY e.event_datetime ASC
-    `;
+      ORDER BY e.event_datetime ASC`;
   } else {
-    const typeMap = {
-      'aluno': ['aluno','student'],
-      'professor': ['professor','teacher'],
-      'responsavel': ['responsavel','guardian'],
-      'admin': ['admin']
-    };
+    const { likeParams, containsClauses } = buildTypeFilter(effectiveUserType);
 
-    const variants = typeMap[effectiveUserType] || [effectiveUserType];
-    // Nem todos os ambientes têm suporte a funções JSON (ex: JSON_CONTAINS).
-    // Para compatibilidade, usar LOWER(target_user_types) LIKE ? para detectar valores.
-    const likeCandidates = variants.map(v => `%${String(v).toLowerCase()}%`);
-    const containsClauses = variants.map(() => "LOWER(COALESCE(e.target_user_types,'')) LIKE ?").join(' OR ');
+    const visibleToUserType = `(
+      e.target_user_types IS NULL
+      OR e.target_user_types = ''
+      OR e.target_user_types = '[]'
+      OR (${containsClauses})
+    )`;
 
-    query = `
-      SELECT DISTINCT e.*, 
-             CONCAT(u.first_name, ' ', u.last_name) as created_by,
-             ut.name as creator_type,
-             GROUP_CONCAT(DISTINCT g.name) as grupos,
-             e.target_user_types
-      FROM events e
-      LEFT JOIN users u ON e.user_id = u.id
-      LEFT JOIN user_types ut ON u.user_type_id = ut.id
-      LEFT JOIN event_groups eg ON e.id = eg.event_id
-      LEFT JOIN \`groups\` g ON eg.group_id = g.id
-      WHERE (
-        (
-          -- Tipo de usuário: aceitar quando não definido (NULL/empty/[])
-          (
-            e.target_user_types IS NULL OR e.target_user_types = '' OR e.target_user_types = '[]'
-          )
-          OR (
-            ${containsClauses}
-          )
-        )
-        AND (
-          (
-            (e.groups_combined = 0 
-             AND (
-               NOT EXISTS (
-                 SELECT 1 FROM event_groups eg0 WHERE eg0.event_id = e.id
-               )
-               OR e.id IN (
-                 SELECT DISTINCT eg2.event_id 
-                 FROM event_groups eg2
-                 JOIN user_groups ug ON eg2.group_id = ug.group_id
-                 WHERE ug.user_id = ?
-               )
-             ))
-            OR
-            (e.groups_combined = 1
-             AND e.id IN (
-               SELECT eg3.event_id
-               FROM event_groups eg3
-               WHERE eg3.event_id NOT IN (
-                 SELECT DISTINCT eg4.event_id
-                 FROM event_groups eg4
-                 WHERE eg4.group_id NOT IN (
-                   SELECT ug2.group_id
-                   FROM user_groups ug2
-                   WHERE ug2.user_id = ?
-                 )
-               )
-             ))
-          )
-        )
-      )
+    const whereParts = [visibleToUserType, groupsFilter];
+
+    query = `${selectBase(true)}
+      WHERE ${whereParts.join(' AND ')}
       GROUP BY e.id
-      ORDER BY e.event_datetime ASC
-    `;
+      ORDER BY e.event_datetime ASC`;
 
-    // parametros para as cláusulas de tipo (apenas patterns lowercased)
-    params = [...likeCandidates, effectiveUserId, effectiveUserId];
+    params = [...likeParams, effectiveUserId, effectiveUserId];
   }
 
   try {
     const result = await db.execute(query, params);
     const events = result[0];
 
-    // Logs diagnósticos opcionais para entender por que um evento foi incluído
     const debugEvents = process.env.DEBUG_EVENTS_MODEL === 'true';
     if (debugEvents) {
       console.log('[eventModel] debug: getEventsForUser debug', { effectiveUserId, effectiveUserType, canViewAll, eventsCount: events.length });
@@ -229,67 +224,16 @@ async function getEventsForUser(reqUser) {
     return { events, effectiveUserId };
   } catch (queryErr) {
     if (queryErr && queryErr.code === 'ER_BAD_FIELD_ERROR' && /target_user_types/.test(queryErr.message)) {
-      // fallback: reconstruir query sem target_user_types
       if (canViewAll) {
-        query = `
-          SELECT DISTINCT e.*, 
-                 CONCAT(u.first_name, ' ', u.last_name) as created_by,
-                 ut.name as creator_type,
-                 GROUP_CONCAT(DISTINCT g.name) as grupos
-          FROM events e
-          LEFT JOIN users u ON e.user_id = u.id
-          LEFT JOIN user_types ut ON u.user_type_id = ut.id
-          LEFT JOIN event_groups eg ON e.id = eg.event_id
-          LEFT JOIN \`groups\` g ON eg.group_id = g.id
+        query = `${selectBase(false)}
           GROUP BY e.id
-          ORDER BY e.event_datetime ASC
-        `;
+          ORDER BY e.event_datetime ASC`;
         params = [];
       } else {
-        query = `
-          SELECT DISTINCT e.*, 
-                 CONCAT(u.first_name, ' ', u.last_name) as created_by,
-                 ut.name as creator_type,
-                 GROUP_CONCAT(DISTINCT g.name) as grupos
-          FROM events e
-          LEFT JOIN users u ON e.user_id = u.id
-          LEFT JOIN user_types ut ON u.user_type_id = ut.id
-          LEFT JOIN event_groups eg ON e.id = eg.event_id
-          LEFT JOIN \`groups\` g ON eg.group_id = g.id
-          WHERE (
-            (
-              (e.groups_combined = 0 
-               AND (
-                 NOT EXISTS (
-                   SELECT 1 FROM event_groups eg0 WHERE eg0.event_id = e.id
-                 )
-                 OR e.id IN (
-                   SELECT DISTINCT eg2.event_id 
-                   FROM event_groups eg2
-                   JOIN user_groups ug ON eg2.group_id = ug.group_id
-                   WHERE ug.user_id = ?
-                 )
-               ))
-              OR
-              (e.groups_combined = 1
-               AND e.id IN (
-                 SELECT eg3.event_id
-                 FROM event_groups eg3
-                 WHERE eg3.event_id NOT IN (
-                   SELECT DISTINCT eg4.event_id
-                   FROM event_groups eg4
-                   WHERE eg4.group_id NOT IN (
-                     SELECT ug2.group_id
-                     FROM user_groups ug2
-                     WHERE ug2.user_id = ?
-                   )
-                 )
-               ))
-            )
-          )
+        query = `${selectBase(false)}
+          WHERE ${groupsFilter}
           GROUP BY e.id
-          ORDER BY e.event_datetime ASC
-        `;
+          ORDER BY e.event_datetime ASC`;
         params = [effectiveUserId, effectiveUserId];
       }
 
