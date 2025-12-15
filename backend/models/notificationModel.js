@@ -23,7 +23,7 @@ async function getEligibleSubscriptionsForEvent(eventId) {
   const [egs] = await db.execute('SELECT group_id FROM event_groups WHERE event_id = ?', [eventId]);
   const eventGroupIds = egs.map(r => Number(r.group_id));
 
-  // Carregar subscrições com info de usuário
+  // Carregar subscriptions com info de usuário
   const [subscriptions] = await db.execute(`
     SELECT s.endpoint, s.keys_p256dh, s.keys_auth, s.user_id,
            ut.id AS user_type_id, ut.name AS user_type_name, p.can_receive_notifications,
