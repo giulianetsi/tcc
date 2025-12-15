@@ -26,14 +26,14 @@ async function getEligibleSubscriptionsForEvent(eventId) {
   // Carregar subscrições com info de usuário
   const [subscriptions] = await db.execute(`
     SELECT s.endpoint, s.keys_p256dh, s.keys_auth, s.user_id,
-           ut.id AS user_type_id, p.can_receive_notifications,
+           ut.id AS user_type_id, ut.name AS user_type_name, p.can_receive_notifications,
            GROUP_CONCAT(ug.group_id) AS user_group_ids
     FROM subscriptions s
     LEFT JOIN users u ON s.user_id = u.id
     LEFT JOIN user_types ut ON u.user_type_id = ut.id
     LEFT JOIN permissions p ON ut.id = p.user_type_id
     LEFT JOIN user_groups ug ON ug.user_id = u.id
-    GROUP BY s.endpoint, s.keys_p256dh, s.keys_auth, s.user_id, ut.id, p.can_receive_notifications
+    GROUP BY s.endpoint, s.keys_p256dh, s.keys_auth, s.user_id, ut.id, ut.name, p.can_receive_notifications
   `);
 
   if (!subscriptions?.length) return [];
@@ -57,10 +57,15 @@ async function getEligibleSubscriptionsForEvent(eventId) {
       continue;
     }
 
-    // 3. Filtro de tipo - comparar direto com user_type_id
-    // (user_type_id vem de ut.id na query, que corresponde ao tipo do usuário)
-    if (hasTypeFilter && !lowerTargetTypes.includes(String(sub.user_type_id).toLowerCase())) {
-      continue;
+    // 3. Filtro de tipo - comparar com o nome do tipo (case-insensitive)
+    // targetUserTypes pode conter ['aluno', 'student'] ou IDs
+    if (hasTypeFilter) {
+      const userTypeName = sub.user_type_name ? String(sub.user_type_name).toLowerCase() : '';
+      const matchesType = lowerTargetTypes.some(t => 
+        String(t).toLowerCase() === userTypeName || 
+        String(t).toLowerCase() === String(sub.user_type_id)
+      );
+      if (!matchesType) continue;
     }
 
     // 4. Filtro de grupos
