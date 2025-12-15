@@ -171,11 +171,13 @@ function buildTypeFilter(effectiveUserType) {
  * Retorna um objeto: { events: Array, effectiveUserId }
  */
 async function getEventsForUser(reqUser) {
-  const { effectiveUserId, effectiveUserType, canViewAll } = await resolveEffectiveUser(reqUser);
+  const { effectiveUserId, effectiveUserType } = await resolveEffectiveUser(reqUser);
   let query;
   let params = [];
 
-  if (canViewAll) {
+  const isAdmin = String(effectiveUserType || '').toLowerCase() === 'admin';
+
+  if (isAdmin) {
     query = `${selectBase(true)}
       GROUP BY e.id
       ORDER BY e.event_datetime ASC`;
@@ -205,7 +207,7 @@ async function getEventsForUser(reqUser) {
 
     const debugEvents = process.env.DEBUG_EVENTS_MODEL === 'true';
     if (debugEvents) {
-      console.log('[eventModel] debug: getEventsForUser debug', { effectiveUserId, effectiveUserType, canViewAll, eventsCount: events.length });
+      console.log('[eventModel] debug: getEventsForUser debug', { effectiveUserId, effectiveUserType, isAdmin, eventsCount: events.length });
       const typeMap = {
         'aluno': ['aluno','student'],
         'professor': ['professor','teacher'],
@@ -224,7 +226,7 @@ async function getEventsForUser(reqUser) {
     return { events, effectiveUserId };
   } catch (queryErr) {
     if (queryErr && queryErr.code === 'ER_BAD_FIELD_ERROR' && /target_user_types/.test(queryErr.message)) {
-      if (canViewAll) {
+      if (isAdmin) {
         query = `${selectBase(false)}
           GROUP BY e.id
           ORDER BY e.event_datetime ASC`;
